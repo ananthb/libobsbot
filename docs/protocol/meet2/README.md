@@ -40,6 +40,22 @@ The raw GUID bytes in the descriptor are
 `91 72 1e 9a 43 68 83 46 6d 92 39 bc 79 06 ee 49` — i.e. Microsoft
 encoding, which is what `nusb` and the UVC class expect when matching the XU.
 
+## Control-surface split (from `initial_apply.pcapng`)
+
+The camera exposes two control surfaces, only one of which is OBSBOT-specific:
+
+| Surface | Entity | What lives here                                                                                  |
+|---------|-------:|--------------------------------------------------------------------------------------------------|
+| Standard UVC `CameraTerminal` | 1 | zoom, pan/tilt, focus, exposure, roll — UVC 1.5 §A.9.4 selectors        |
+| Standard UVC `ProcessingUnit` | 3 | brightness, contrast, saturation, hue, sharpness, gain, WB temp + auto, etc. — UVC 1.5 §A.9.5 |
+| OBSBOT vendor extension       | 2 | mediaMode, HDR/WDR, FOV preset, face AE/focus, AI tracking, status — all proprietary           |
+
+Standard UVC paths do not need per-method `.pcapng` files — UVC 1.5 §A.9
+is the source. OBSBOT XU paths still require per-method captures per
+`CONTRIBUTING.md`.
+
+See `initial_apply.md` for the protocol observations behind this split.
+
 ## Capture procedure
 
 1. On Linux: `sudo modprobe usbmon && sudo setfacl -m u:$USER:r /dev/usbmon*`.
