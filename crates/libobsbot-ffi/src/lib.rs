@@ -117,7 +117,7 @@ pub const OBSBOT_EVENT_STATUS: c_int = 3;
 /// One event delivered by [`obsbot_devices_poll_event`]. For Added /
 /// Removed events the `status` fields are zeroed; for Status events
 /// every field is filled exactly as in
-/// [`obsbot_device_status`](crate::obsbot_device_status).
+/// [`obsbot_device_status`].
 #[repr(C)]
 pub struct ObsbotEvent {
     /// One of the `OBSBOT_EVENT_*` constants.
