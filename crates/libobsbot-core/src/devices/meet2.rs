@@ -52,6 +52,13 @@ pub(crate) const MODE_FOV: u8 = 0x04;
 /// `setAiMode.pcapng` frames 56 (value=2) + 64 (value=0).
 pub(crate) const MODE_AI_MODE: u8 = 0x16;
 
+/// `XU_SEL_MODE_REGISTER` control id for the auto-framing sub-mode.
+/// Value is two u8 bytes `[group_single, close_upper]` matching the
+/// SDK's `Device::AutoFramingType` enum
+/// (`group_single`: 0=Group / 1=Single; `close_upper`: 0=CloseUp /
+/// 1=UpperBody, ignored when Group). `setAutoFraming*.pcapng`.
+pub(crate) const MODE_AUTO_FRAMING: u8 = 0x0d;
+
 /// Payload length for every `XU_SEL_MODE_REGISTER` SET observed so far.
 pub(crate) const MODE_REGISTER_PAYLOAD_LEN: usize = 60;
 
@@ -82,6 +89,13 @@ pub(crate) const XU_SEL_RPC: u8 = 0x02;
 
 /// Length of every `XU_SEL_RPC` SET request and GET reply.
 pub(crate) const RPC_FRAME_LEN: usize = 60;
+
+/// How many times to poll the `XU_SEL_RPC` GET buffer before giving up
+/// on a request, since the camera processes our SET asynchronously.
+pub(crate) const RPC_REPLY_POLL_ATTEMPTS: u32 = 10;
+
+/// Delay between `XU_SEL_RPC` GET polls in milliseconds.
+pub(crate) const RPC_REPLY_POLL_DELAY_MS: u64 = 20;
 
 /// Offset of the `cmd_id` byte inside an `XU_SEL_RPC` frame.
 const RPC_CMD_ID_OFFSET: usize = 10;

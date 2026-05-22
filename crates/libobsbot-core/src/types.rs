@@ -44,15 +44,17 @@ pub enum WhiteBalanceMode {
     Tungsten,
 }
 
-/// AI auto-framing mode.
+/// Auto-framing sub-mode for the Meet 2.
+/// Maps onto the SDK's `cameraSetAutoFramingModeU(group_single,
+/// close_upper)` pair.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutoFramingMode {
-    /// Single subject, head-and-shoulders.
-    SingleHeadShoulders,
-    /// Single subject, upper body.
-    SingleUpperBody,
-    /// Group framing.
+    /// Multi-person framing.
     Group,
+    /// Single subject, close-up framing.
+    SingleCloseUp,
+    /// Single subject, upper-body framing.
+    SingleUpperBody,
 }
 
 /// AI master mode. Matches `Device::AiWorkModeType` in the OBSBOT

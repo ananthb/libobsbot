@@ -26,21 +26,26 @@ using namespace std;
 using namespace std::chrono;
 
 static int usage() {
-    cerr << "usage: meet2-exercise --<api> <value>\n"
-            "  --set-media-mode  <0|1|2>          (Normal / Background / AutoFrame)\n"
-            "  --set-wdr         <0|1>            (off / DOL2-to-1)\n"
-            "  --set-fov         <0|1|2>          (86 / 78 / 65)\n"
-            "  --set-face-ae     <0|1>\n"
-            "  --set-face-focus  <0|1>\n";
+    cerr << "usage: meet2-exercise --<api> <value> [<value2>]\n"
+            "  --set-media-mode    <0|1|2>          (Normal / Background / AutoFrame)\n"
+            "  --set-wdr           <0|1>            (off / DOL2-to-1)\n"
+            "  --set-fov           <0|1|2>          (86 / 78 / 65)\n"
+            "  --set-face-ae       <0|1>\n"
+            "  --set-face-focus    <0|1>\n"
+            "  --set-ai-mode       <0..5>           (None / Group / Human / Hand / WhiteBoard / Desk)\n"
+            "  --set-auto-framing  <group_single> [<close_upper>]\n"
+            "                                       group_single: 0=Group, 1=Single\n"
+            "                                       close_upper:  0=CloseUp, 1=UpperBody (Single only)\n";
     return 2;
 }
 
 int main(int argc, char **argv) {
-    if (argc != 3)
+    if (argc < 3 || argc > 4)
         return usage();
 
     string api = argv[1];
     int value = atoi(argv[2]);
+    int value2 = (argc > 3) ? atoi(argv[3]) : 0;
 
     bool connected = false;
     auto on_change = [&connected](string sn, bool c, void *) {
@@ -78,6 +83,12 @@ int main(int argc, char **argv) {
         ret = dev->cameraSetFaceAER(value);
     else if (api == "--set-face-focus")
         ret = dev->cameraSetFaceFocusR(value != 0);
+    else if (api == "--set-ai-mode")
+        ret = dev->cameraSetAiModeU(static_cast<Device::AiWorkModeType>(value));
+    else if (api == "--set-auto-framing")
+        ret = dev->cameraSetAutoFramingModeU(
+            static_cast<Device::AutoFramingType>(value),
+            static_cast<Device::AutoFramingType>(value2));
     else
         return usage();
 

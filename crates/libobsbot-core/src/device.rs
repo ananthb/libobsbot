@@ -85,40 +85,46 @@ impl Device {
     /// other physical units will need their own canned frame until the
     /// CRC at offset 6-7 is decoded.
     pub fn firmware_from_camera(&self) -> Result<String> {
-        self.transport.uvc_set(
-            meet2::XU_ENTITY_ID,
-            meet2::XU_SEL_RPC,
-            &meet2::RPC_REQUEST_FIRMWARE,
-        )?;
-        let mut reply = [0u8; meet2::RPC_FRAME_LEN];
-        let _ = self.transport.uvc_get(
-            UvcGet::Cur,
-            meet2::XU_ENTITY_ID,
-            meet2::XU_SEL_RPC,
-            &mut reply,
-        )?;
-        meet2::decode_firmware_reply(&reply).ok_or(Error::BadResponse {
-            selector: meet2::XU_SEL_RPC,
-            bytes: reply.to_vec(),
-        })
+        self.rpc_request_then_reply(&meet2::RPC_REQUEST_FIRMWARE, meet2::decode_firmware_reply)
     }
 
     /// Ask the camera for its serial number via the XU RPC channel.
     /// Same canned-request caveat as [`firmware_from_camera`](Self::firmware_from_camera).
     pub fn serial_from_camera(&self) -> Result<String> {
-        self.transport.uvc_set(
-            meet2::XU_ENTITY_ID,
-            meet2::XU_SEL_RPC,
-            &meet2::RPC_REQUEST_SERIAL,
-        )?;
+        self.rpc_request_then_reply(&meet2::RPC_REQUEST_SERIAL, meet2::decode_serial_reply)
+    }
+
+    /// SET a canned `XU_SEL_RPC` request, then poll GET until `decode`
+    /// returns a value. The camera processes SETs asynchronously, so
+    /// the first GET right after a SET typically returns the previous
+    /// session's reply.
+    fn rpc_request_then_reply(
+        &self,
+        request: &[u8; meet2::RPC_FRAME_LEN],
+        decode: impl Fn(&[u8]) -> Option<String>,
+    ) -> Result<String> {
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_RPC, request)?;
         let mut reply = [0u8; meet2::RPC_FRAME_LEN];
-        let _ = self.transport.uvc_get(
-            UvcGet::Cur,
-            meet2::XU_ENTITY_ID,
-            meet2::XU_SEL_RPC,
-            &mut reply,
-        )?;
-        meet2::decode_serial_reply(&reply).ok_or(Error::BadResponse {
+        for attempt in 0..meet2::RPC_REPLY_POLL_ATTEMPTS {
+            // Tight loop, then back off; the camera typically catches up in
+            // a few milliseconds.
+            if attempt > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(
+                    meet2::RPC_REPLY_POLL_DELAY_MS,
+                ));
+            }
+            let _ = self.transport.uvc_get(
+                UvcGet::Cur,
+                meet2::XU_ENTITY_ID,
+                meet2::XU_SEL_RPC,
+                &mut reply,
+            )?;
+            if let Some(decoded) = decode(&reply) {
+                return Ok(decoded);
+            }
+        }
+        Err(Error::BadResponse {
             selector: meet2::XU_SEL_RPC,
             bytes: reply.to_vec(),
         })
@@ -400,10 +406,14 @@ impl Device {
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
-    /// Configure auto-framing.
+    /// Set the auto-framing sub-mode. XU mode-register control id
+    /// `0x0d` with a 2-byte value `[group_single, close_upper]`; see
+    /// `doc/protocol/meet2/setAutoFraming.md`.
     pub fn set_auto_framing(&self, mode: AutoFramingMode) -> Result<()> {
+        let payload =
+            meet2::mode_register_payload(meet2::MODE_AUTO_FRAMING, &encode_auto_framing(mode));
         self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_auto_framing(mode)])
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
     /// Set the AI master mode. XU mode-register control id `0x16`
@@ -518,11 +528,13 @@ fn encode_media_mode(mode: MediaMode) -> u8 {
     }
 }
 
-fn encode_auto_framing(mode: AutoFramingMode) -> u8 {
+/// 2-byte wire encoding `[group_single, close_upper]` for the
+/// auto-framing sub-mode mode-register control.
+fn encode_auto_framing(mode: AutoFramingMode) -> [u8; 2] {
     match mode {
-        AutoFramingMode::SingleHeadShoulders => 0,
-        AutoFramingMode::SingleUpperBody => 1,
-        AutoFramingMode::Group => 2,
+        AutoFramingMode::Group => [0, 0],
+        AutoFramingMode::SingleCloseUp => [1, 0],
+        AutoFramingMode::SingleUpperBody => [1, 1],
     }
 }
 
@@ -688,6 +700,29 @@ mod tests {
         let (_, _, payload) = last_set(&mock);
         // setWdr.pcapng frame 82: control_id=0x01, flag=0x01, value=0x00 (off).
         assert_eq!(payload[..3], [0x01, 0x01, 0x00]);
+    }
+
+    #[test]
+    fn auto_framing_routes_to_xu_mode_register_with_pair_value() {
+        let (d, mock) = device_with_mock();
+
+        // setAutoFramingGroup.pcapng: 0d 02 00 00
+        d.set_auto_framing(AutoFramingMode::Group).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        assert_eq!(payload[..4], [0x0d, 0x02, 0x00, 0x00]);
+
+        // setAutoFramingSingleCloseUp.pcapng: 0d 02 01 00
+        d.set_auto_framing(AutoFramingMode::SingleCloseUp).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..4], [0x0d, 0x02, 0x01, 0x00]);
+
+        // setAutoFramingSingleUpperBody.pcapng: 0d 02 01 01
+        d.set_auto_framing(AutoFramingMode::SingleUpperBody)
+            .unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..4], [0x0d, 0x02, 0x01, 0x01]);
     }
 
     #[test]
