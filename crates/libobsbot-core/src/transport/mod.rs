@@ -3,7 +3,7 @@
 //!
 //! Every method on [`crate::Device`] is a thin shim that calls into a
 //! `Transport` implementation. The default in-tree implementation is
-//! [`usb::UsbTransport`] (ioctls on `/dev/videoN` via the `uvcvideo` driver
+//! `usb::UsbTransport` (ioctls on `/dev/videoN` via the `uvcvideo` driver
 //! on Linux); test code substitutes a mock.
 //!
 //! The trait expresses USB Video Class class-specific control transfers

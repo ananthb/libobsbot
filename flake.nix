@@ -18,6 +18,26 @@
 
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
+        # MSRV pinned to the value in workspace.package.rust-version. Bumped
+        # above 1.75 when a transitive dep (getrandom-0.4 → tempfile →
+        # cbindgen) started requiring edition 2024.
+        rustMsrv = pkgs.rust-bin.stable."1.85.0".default;
+        rustPlatformMsrv = pkgs.makeRustPlatform {
+          rustc = rustMsrv;
+          cargo = rustMsrv;
+        };
+
+        # Nightly + miri + rust-src for the `miri` devShell. Not used in
+        # `checks` — building the miri sysroot inside nix's offline sandbox
+        # would need the rust-lang std deps (rustc-demangle, etc.) vendored
+        # alongside ours, which we don't pull in for normal builds. Run
+        # miri locally instead: `nix develop .#miri -c cargo miri test
+        # --workspace -- --skip transport::`.
+        rustNightlyMiri = pkgs.rust-bin.selectLatestNightlyWith (toolchain:
+          toolchain.default.override {
+            extensions = [ "miri-preview" "rust-src" ];
+          });
+
         platformInputs = with pkgs;
           lib.optionals stdenv.isLinux [ libusb1 udev ];
 
@@ -71,26 +91,44 @@
           libobsbot = libobsbot;
         };
 
-        devShells.default = pkgs.mkShell {
-          inherit nativeBuildInputs;
-          buildInputs = buildInputs ++ (with pkgs; [
-            cargo-edit
-            cargo-outdated
-            cargo-audit
-            rust-cbindgen
-          ] ++ lib.optionals stdenv.isLinux [
-            wireshark
-            usbutils
-          ]);
+        devShells = {
+          default = pkgs.mkShell {
+            inherit nativeBuildInputs;
+            buildInputs = buildInputs ++ (with pkgs; [
+              cargo-edit
+              cargo-outdated
+              cargo-audit
+              cargo-deny
+              rust-cbindgen
+              valgrind
+            ] ++ lib.optionals stdenv.isLinux [
+              wireshark
+              usbutils
+            ]);
 
-          # Make rust-analyzer happy.
-          RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+            # Make rust-analyzer happy.
+            RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
 
-          shellHook = ''
-            echo "libobsbot devshell"
-            echo "  $(cargo --version)"
-            echo "  $(rustc --version)"
-          '';
+            shellHook = ''
+              echo "libobsbot devshell"
+              echo "  $(cargo --version)"
+              echo "  $(rustc --version)"
+            '';
+          };
+
+          # `nix develop .#miri` — nightly toolchain with miri + rust-src
+          # pre-installed, ready to `cargo miri test`. Network-on, so the
+          # sysroot can build the first time.
+          miri = pkgs.mkShell {
+            nativeBuildInputs = [ pkgs.pkg-config rustNightlyMiri ];
+            inherit buildInputs;
+            shellHook = ''
+              echo "libobsbot miri shell"
+              echo "  $(cargo --version)"
+              echo "  $(rustc --version)"
+              echo "  run: cargo miri test --workspace -- --skip transport::"
+            '';
+          };
         };
 
         checks = {
@@ -136,6 +174,73 @@
             '';
             doCheck = false;
           });
+
+          # cargo-deny: license + bans + sources. The advisories check needs
+          # the RustSec advisory-db git tree fetched at evaluation time and
+          # is left to a separate workflow / `cargo deny check advisories`
+          # invocation in the devShell.
+          cargo-deny = pkgs.rustPlatform.buildRustPackage (cargoArtifacts // {
+            pname = "libobsbot-cargo-deny";
+            version = "0.0.0";
+            nativeBuildInputs = nativeBuildInputs ++ [ pkgs.cargo-deny ];
+            buildPhase = ''
+              cargo deny --offline check licenses bans sources
+            '';
+            installPhase = ''
+              mkdir -p $out
+            '';
+            doCheck = false;
+          });
+
+          # Rustdoc: refuse broken intra-doc links so public API docs don't
+          # rot silently.
+          rustdoc-links = pkgs.rustPlatform.buildRustPackage (cargoArtifacts // {
+            pname = "libobsbot-rustdoc-links";
+            version = "0.0.0";
+            RUSTDOCFLAGS = "-D rustdoc::broken_intra_doc_links -D rustdoc::private_intra_doc_links";
+            buildPhase = ''
+              cargo doc --workspace --no-deps
+            '';
+            installPhase = ''
+              mkdir -p $out
+            '';
+            doCheck = false;
+          });
+
+          # MSRV: verify the workspace builds against the rust-version
+          # claimed in `workspace.package.rust-version` (currently 1.85).
+          msrv = rustPlatformMsrv.buildRustPackage (cargoArtifacts // {
+            pname = "libobsbot-msrv";
+            version = "0.0.0";
+            nativeBuildInputs = [ pkgs.pkg-config rustMsrv ];
+            buildPhase = ''
+              cargo check --workspace --all-targets
+            '';
+            installPhase = ''
+              mkdir -p $out
+            '';
+            doCheck = false;
+          });
+
+          # Valgrind over the C smoke - the FFI boundary is exactly where
+          # C-side leaks / UAFs would hide.
+          valgrind-c-smoke = pkgs.runCommand "libobsbot-valgrind-c-smoke" {
+            nativeBuildInputs = with pkgs; [ gcc valgrind ];
+          } ''
+            cp ${./crates/libobsbot-ffi/examples/c_smoke.c} c_smoke.c
+            gcc -O2 -Wall -Wextra \
+              -I ${libobsbot}/include \
+              -L ${libobsbot}/lib \
+              -Wl,-rpath,${libobsbot}/lib \
+              c_smoke.c -lobsbot -o c_smoke
+            valgrind \
+              --error-exitcode=1 \
+              --leak-check=full \
+              --errors-for-leak-kinds=definite \
+              --show-leak-kinds=definite,possible \
+              ./c_smoke
+            touch $out
+          '';
         };
 
         formatter = pkgs.nixpkgs-fmt;

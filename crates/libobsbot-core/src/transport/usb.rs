@@ -4,10 +4,10 @@
 //! Issues UVC class-specific `SET_CUR` and `GET_*` requests via the
 //! `uvcvideo` driver's ioctl interface on `/dev/videoN`. This coexists
 //! with v4l2 streaming apps (Zoom / OBS / Cheese keep working). See
-//! [`super::uvcvideo`] for the V4L2 + UVCIOC dispatch.
+//! See `super::uvcvideo` for the V4L2 + UVCIOC dispatch.
 //!
 //! macOS and Windows transports are planned and will live in sibling
-//! modules with the same [`Transport`] surface.
+//! modules with the same `Transport` surface.
 
 #![cfg(target_os = "linux")]
 

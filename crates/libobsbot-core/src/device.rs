@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Opened camera handle and the v1 method surface.
 //!
-//! Each method routes through the [`Transport`] trait. The transport
-//! returns [`Error::Unsupported`] until real `control_in`/`control_out`
-//! calls land; the method signatures and entity/selector routing are
-//! stable.
+//! Each method routes through the crate-internal `Transport` trait. The
+//! transport returns [`Error::Unsupported`] until real
+//! `control_in`/`control_out` calls land; the method signatures and
+//! entity/selector routing are stable.
 
 use core::ops::RangeInclusive;
 
@@ -290,7 +290,7 @@ impl Device {
     // ---- OBSBOT vendor extension (entity 2) ---------------------------------
     //
     // Every method below routes through the XU. Selector and payload layout
-    // are pending per-method captures under docs/protocol/meet2/.
+    // are pending per-method captures under doc/protocol/meet2/.
 
     /// Set HDR mode.
     pub fn set_wdr(&self, mode: WdrMode) -> Result<()> {
@@ -465,74 +465,16 @@ fn encode_track_speed(speed: TrackSpeed) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transport::Transport;
-    use std::sync::Mutex;
+    use crate::testing::{device_with_mock, last_set};
 
-    #[derive(Default)]
-    struct MockTransport {
-        last_set: Mutex<Option<(u8, u8, Vec<u8>)>>,
-    }
-
-    impl Transport for MockTransport {
-        fn uvc_set(&self, entity: u8, selector: u8, payload: &[u8]) -> Result<()> {
-            *self.last_set.lock().unwrap() = Some((entity, selector, payload.to_vec()));
-            Ok(())
-        }
-
-        fn uvc_get(
-            &self,
-            _req: UvcGet,
-            _entity: u8,
-            _selector: u8,
-            out: &mut [u8],
-        ) -> Result<usize> {
-            for b in &mut *out {
-                *b = 0;
-            }
-            Ok(out.len())
-        }
-    }
-
-    fn device_with_mock() -> (Device, std::sync::Arc<MockTransport>) {
-        let mock = std::sync::Arc::new(MockTransport::default());
-        let transport: Box<dyn Transport> = Box::new(MockTransport::default());
-        let info = DeviceInfo {
-            vendor_id: meet2::VENDOR_ID,
-            product_id: meet2::PRODUCT_ID_MEET2,
-            product_type: ProductType::Meet2,
-            serial: "MOCK".to_owned(),
-            #[cfg(target_os = "linux")]
-            busnum: 0,
-            #[cfg(target_os = "linux")]
-            devnum: 0,
-        };
-        (Device::new(info, transport), mock)
-    }
-
-    struct Forward(std::sync::Arc<MockTransport>);
-    impl Transport for Forward {
-        fn uvc_set(&self, entity: u8, selector: u8, payload: &[u8]) -> Result<()> {
-            self.0.uvc_set(entity, selector, payload)
-        }
-        fn uvc_get(&self, req: UvcGet, entity: u8, selector: u8, out: &mut [u8]) -> Result<usize> {
-            self.0.uvc_get(req, entity, selector, out)
-        }
-    }
-
-    fn device_with_observable_mock() -> (Device, std::sync::Arc<MockTransport>) {
-        let mock = std::sync::Arc::new(MockTransport::default());
-        let transport: Box<dyn Transport> = Box::new(Forward(mock.clone()));
-        let info = DeviceInfo {
-            vendor_id: meet2::VENDOR_ID,
-            product_id: meet2::PRODUCT_ID_MEET2,
-            product_type: ProductType::Meet2,
-            serial: "MOCK".to_owned(),
-            #[cfg(target_os = "linux")]
-            busnum: 0,
-            #[cfg(target_os = "linux")]
-            devnum: 0,
-        };
-        (Device::new(info, transport), mock)
+    #[test]
+    fn brightness_range_decodes_min_then_max() {
+        use crate::testing::device_with_scripted_get;
+        // Min = -64 (i16 LE: c0 ff), Max = 64 (i16 LE: 40 00).
+        let device = device_with_scripted_get(vec![vec![0xc0, 0xff], vec![0x40, 0x00]]);
+        let range = device.brightness_range().unwrap();
+        assert_eq!(*range.start(), -64);
+        assert_eq!(*range.end(), 64);
     }
 
     #[test]
@@ -553,9 +495,9 @@ mod tests {
 
     #[test]
     fn pan_tilt_routes_to_camera_terminal() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_pan_tilt(0.0, 0.0).unwrap();
-        let (entity, selector, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, selector, payload) = last_set(&mock);
         assert_eq!(entity, uvc::CAMERA_TERMINAL);
         assert_eq!(selector, uvc::ct::PANTILT_ABSOLUTE);
         assert_eq!(payload.len(), 8);
@@ -563,9 +505,9 @@ mod tests {
 
     #[test]
     fn brightness_routes_to_processing_unit_with_i16_payload() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_brightness(42).unwrap();
-        let (entity, selector, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, selector, payload) = last_set(&mock);
         assert_eq!(entity, uvc::PROCESSING_UNIT);
         assert_eq!(selector, uvc::pu::BRIGHTNESS);
         assert_eq!(payload, vec![42, 0]);
@@ -582,15 +524,15 @@ mod tests {
 
     #[test]
     fn contrast_and_saturation_route_to_pu() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_contrast(100).unwrap();
-        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, sel, payload) = last_set(&mock);
         assert_eq!(entity, uvc::PROCESSING_UNIT);
         assert_eq!(sel, uvc::pu::CONTRAST);
         assert_eq!(payload, vec![100, 0]);
 
         d.set_saturation(150).unwrap();
-        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, sel, payload) = last_set(&mock);
         assert_eq!(entity, uvc::PROCESSING_UNIT);
         assert_eq!(sel, uvc::pu::SATURATION);
         assert_eq!(payload, vec![150, 0]);
@@ -598,9 +540,9 @@ mod tests {
 
     #[test]
     fn zoom_routes_to_camera_terminal_with_u16_payload() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_zoom(2.5).unwrap();
-        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, sel, payload) = last_set(&mock);
         assert_eq!(entity, uvc::CAMERA_TERMINAL);
         assert_eq!(sel, uvc::ct::ZOOM_ABSOLUTE);
         assert_eq!(payload, vec![2, 0]); // truncated u16 from 2.5
@@ -608,18 +550,18 @@ mod tests {
 
     #[test]
     fn focus_routes_to_camera_terminal() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_focus(100.0).unwrap();
-        let (entity, sel, _) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, sel, _) = last_set(&mock);
         assert_eq!(entity, uvc::CAMERA_TERMINAL);
         assert_eq!(sel, uvc::ct::FOCUS_ABSOLUTE);
     }
 
     #[test]
     fn wb_auto_routes_to_pu() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_white_balance(WhiteBalanceMode::Auto, None).unwrap();
-        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, sel, payload) = last_set(&mock);
         assert_eq!(entity, uvc::PROCESSING_UNIT);
         assert_eq!(sel, uvc::pu::WHITE_BALANCE_TEMPERATURE_AUTO);
         assert_eq!(payload, vec![1]);
@@ -627,10 +569,10 @@ mod tests {
 
     #[test]
     fn wb_manual_writes_kelvin_to_pu() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_white_balance(WhiteBalanceMode::Manual, Some(5500))
             .unwrap();
-        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, sel, payload) = last_set(&mock);
         assert_eq!(entity, uvc::PROCESSING_UNIT);
         assert_eq!(sel, uvc::pu::WHITE_BALANCE_TEMPERATURE);
         assert_eq!(payload, 5500_u16.to_le_bytes().to_vec());
@@ -638,27 +580,27 @@ mod tests {
 
     #[test]
     fn wb_preset_routes_to_xu() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_white_balance(WhiteBalanceMode::Daylight, None)
             .unwrap();
-        let (entity, _sel, _payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, _sel, _payload) = last_set(&mock);
         assert_eq!(entity, meet2::XU_ENTITY_ID);
     }
 
     #[test]
     fn wdr_routes_to_xu() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_wdr(WdrMode::Dol2To1).unwrap();
-        let (entity, _sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, _sel, payload) = last_set(&mock);
         assert_eq!(entity, meet2::XU_ENTITY_ID);
         assert_eq!(payload, vec![1]);
     }
 
     #[test]
     fn fov_routes_to_xu() {
-        let (d, mock) = device_with_observable_mock();
+        let (d, mock) = device_with_mock();
         d.set_fov(FovType::Wide).unwrap();
-        let (entity, _, _) = mock.last_set.lock().unwrap().clone().unwrap();
+        let (entity, _, _) = last_set(&mock);
         assert_eq!(entity, meet2::XU_ENTITY_ID);
     }
 

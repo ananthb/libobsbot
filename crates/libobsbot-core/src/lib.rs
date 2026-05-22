@@ -14,6 +14,9 @@ pub mod transport;
 pub mod types;
 pub(crate) mod uvc;
 
+#[cfg(test)]
+mod testing;
+
 pub use device::Device;
 pub use discovery::{DeviceInfo, Devices};
 pub use error::{Error, Result};

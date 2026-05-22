@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn null_handles_report_not_found() {
         let mut out: *mut ObsbotDevice = ptr::null_mut();
-        let rc = unsafe { obsbot_devices_open_first(ptr::null_mut(), &mut out) };
+        let rc = unsafe { obsbot_devices_open_first(ptr::null_mut(), &raw mut out) };
         assert_eq!(rc, OBSBOT_ERR_NOT_FOUND);
         let rc = unsafe { obsbot_device_set_brightness(ptr::null_mut(), 0) };
         assert_eq!(rc, OBSBOT_ERR_NOT_FOUND);

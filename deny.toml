@@ -1,0 +1,38 @@
+[graph]
+all-features = true
+
+[licenses]
+# libobsbot itself ships under GPL-3.0-only (the per-crate `[[exceptions]]`
+# below). Transitive deps must be GPL-3-compatible permissive licenses;
+# refusing to expand `allow` without explicit thought is the point.
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+]
+confidence-threshold = 0.93
+
+[[licenses.exceptions]]
+name = "libobsbot-core"
+allow = ["GPL-3.0-only"]
+
+[[licenses.exceptions]]
+name = "libobsbot-ffi"
+allow = ["GPL-3.0-only"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[advisories]
+# `cargo deny check advisories` needs the RustSec advisory-db git tree
+# fetched, which the flake check pulls in as a separate input. Listed
+# here so an offline run doesn't error before reaching the other checks.
+yanked = "warn"

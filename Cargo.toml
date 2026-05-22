@@ -5,7 +5,7 @@ members = ["crates/libobsbot-core", "crates/libobsbot-ffi"]
 [workspace.package]
 version = "0.0.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.85"
 license = "GPL-3.0-only"
 repository = "https://github.com/ananthb/libobsbot"
 authors = ["Ananth Bhaskararaman <antsub@gmail.com>"]

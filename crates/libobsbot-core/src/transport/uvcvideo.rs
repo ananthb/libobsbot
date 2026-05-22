@@ -343,3 +343,118 @@ fn read_u8(path: &std::path::Path) -> Result<u8> {
         .parse()
         .map_err(|_| Error::Usb(format!("parse u8 from {}", path.display())))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cid_for_processing_unit_selectors() {
+        assert_eq!(cid_for(3, 0x02), Some(V4L2_CID_BRIGHTNESS));
+        assert_eq!(cid_for(3, 0x03), Some(V4L2_CID_CONTRAST));
+        assert_eq!(cid_for(3, 0x07), Some(V4L2_CID_SATURATION));
+        assert_eq!(cid_for(3, 0x0a), Some(V4L2_CID_WHITE_BALANCE_TEMPERATURE));
+        assert_eq!(cid_for(3, 0x0b), Some(V4L2_CID_AUTO_WHITE_BALANCE));
+    }
+
+    #[test]
+    fn cid_for_camera_terminal_selectors() {
+        assert_eq!(cid_for(1, 0x06), Some(V4L2_CID_FOCUS_ABSOLUTE));
+        assert_eq!(cid_for(1, 0x0b), Some(V4L2_CID_ZOOM_ABSOLUTE));
+    }
+
+    #[test]
+    fn cid_for_pantilt_returns_none_handled_separately() {
+        // PAN/TILT is split across two V4L2 cids; cid_for must NOT return one
+        // — the special-case in v4l2_set/v4l2_get owns the dispatch.
+        assert_eq!(cid_for(1, 0x0d), None);
+    }
+
+    #[test]
+    fn cid_for_xu_entity_returns_none() {
+        // Vendor XU (entity 2) doesn't have V4L2 cids; it goes through
+        // UVCIOC_CTRL_QUERY after UVCIOC_CTRL_MAP.
+        assert_eq!(cid_for(2, 0x01), None);
+        assert_eq!(cid_for(2, 0x06), None);
+    }
+
+    #[test]
+    fn cid_for_unknown_selector_returns_none() {
+        assert_eq!(cid_for(3, 0xff), None);
+        assert_eq!(cid_for(99, 0x02), None);
+    }
+
+    #[test]
+    fn is_pantilt_only_for_ct_0d() {
+        assert!(is_pantilt(1, 0x0d));
+        assert!(!is_pantilt(1, 0x0b)); // CT_ZOOM_ABSOLUTE
+        assert!(!is_pantilt(3, 0x0d)); // wrong entity
+        assert!(!is_pantilt(2, 0x0d));
+    }
+
+    #[test]
+    fn is_signed_2byte_only_brightness() {
+        assert!(is_signed_2byte(V4L2_CID_BRIGHTNESS));
+        assert!(!is_signed_2byte(V4L2_CID_CONTRAST));
+        assert!(!is_signed_2byte(V4L2_CID_SATURATION));
+        assert!(!is_signed_2byte(V4L2_CID_WHITE_BALANCE_TEMPERATURE));
+    }
+
+    #[test]
+    fn payload_to_i32_one_byte_zero_extends() {
+        assert_eq!(payload_to_i32(V4L2_CID_AUTO_WHITE_BALANCE, &[0x00]), 0);
+        assert_eq!(payload_to_i32(V4L2_CID_AUTO_WHITE_BALANCE, &[0x01]), 1);
+        assert_eq!(payload_to_i32(V4L2_CID_AUTO_WHITE_BALANCE, &[0xff]), 255);
+    }
+
+    #[test]
+    fn payload_to_i32_signed_two_bytes_sign_extends() {
+        // brightness = -10 wire bytes [0xf6, 0xff]
+        assert_eq!(payload_to_i32(V4L2_CID_BRIGHTNESS, &[0xf6, 0xff]), -10);
+        // brightness = 16 wire bytes [0x10, 0x00]
+        assert_eq!(payload_to_i32(V4L2_CID_BRIGHTNESS, &[0x10, 0x00]), 16);
+        // brightness = -32768 (i16::MIN)
+        assert_eq!(payload_to_i32(V4L2_CID_BRIGHTNESS, &[0x00, 0x80]), -32768);
+    }
+
+    #[test]
+    fn payload_to_i32_unsigned_two_bytes_zero_extends() {
+        // contrast = 50000 wire bytes [0x50, 0xc3]
+        assert_eq!(payload_to_i32(V4L2_CID_CONTRAST, &[0x50, 0xc3]), 50000);
+        // saturation = 16
+        assert_eq!(payload_to_i32(V4L2_CID_SATURATION, &[0x10, 0x00]), 16);
+        // contrast = 65535 (u16::MAX)
+        assert_eq!(payload_to_i32(V4L2_CID_CONTRAST, &[0xff, 0xff]), 65535);
+    }
+
+    #[test]
+    fn payload_to_i32_four_bytes_sign_extends() {
+        assert_eq!(
+            payload_to_i32(V4L2_CID_FOCUS_ABSOLUTE, &[0xff, 0xff, 0xff, 0xff]),
+            -1
+        );
+        assert_eq!(
+            payload_to_i32(V4L2_CID_FOCUS_ABSOLUTE, &[0x01, 0x00, 0x00, 0x00]),
+            1
+        );
+    }
+
+    #[test]
+    fn payload_to_i32_unsupported_length_returns_zero() {
+        assert_eq!(payload_to_i32(V4L2_CID_BRIGHTNESS, &[]), 0);
+        assert_eq!(payload_to_i32(V4L2_CID_BRIGHTNESS, &[0x01, 0x02, 0x03]), 0);
+    }
+
+    #[test]
+    fn uvc_xu_control_query_struct_size_matches_kernel_abi() {
+        // The UVCIOC_CTRL_QUERY ioctl number encodes 16 in its size field;
+        // a struct mismatch would silently corrupt kernel memory.
+        assert_eq!(core::mem::size_of::<UvcXuControlQuery>(), 16);
+    }
+
+    #[test]
+    fn v4l2_struct_sizes_match_kernel_abi() {
+        assert_eq!(core::mem::size_of::<V4l2Control>(), 8);
+        assert_eq!(core::mem::size_of::<V4l2Queryctrl>(), 68);
+    }
+}
