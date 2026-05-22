@@ -3,9 +3,9 @@
 //!
 //! Enumerates connected cameras, opens the first one, and reads a small set
 //! of standard UVC controls (brightness, contrast, saturation) plus their
-//! reported ranges. All of these route through real `nusb` control transfers
-//! to the Processing Unit; OBSBOT XU methods still return `Unsupported`
-//! until per-method captures land.
+//! reported ranges. All of these route through the `uvcvideo` driver via
+//! V4L2 ioctls on `/dev/videoN`; OBSBOT XU methods still return
+//! `Unsupported` until per-method captures land.
 
 use libobsbot_core::{Devices, Error};
 

@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Device enumeration and hot-plug.
 
-use crate::devices::meet2;
 use crate::status::{Event, EventReceiver};
-use crate::transport::usb::UsbTransport;
 use crate::types::ProductType;
 use crate::{Device, Result};
 
@@ -16,9 +14,15 @@ pub struct DeviceInfo {
     pub product_id: u16,
     /// Camera model.
     pub product_type: ProductType,
-    /// Device serial number, when the OS exposes it without opening the
-    /// device. Empty when unknown.
+    /// Device serial number, when the OS exposes it. Empty when unknown
+    /// (the Meet 2 sets `iSerial = 0` in its USB descriptor, so no serial
+    /// is available before opening; the camera reports one at runtime).
     pub serial: String,
+
+    #[cfg(target_os = "linux")]
+    pub(crate) busnum: u8,
+    #[cfg(target_os = "linux")]
+    pub(crate) devnum: u8,
 }
 
 /// Owns the hot-plug watcher and the registry of connected cameras.
@@ -39,19 +43,16 @@ impl Devices {
     }
 
     /// Snapshot of currently-connected OBSBOT cameras.
-    ///
-    /// Uses `nusb::list_devices` to enumerate every USB device on the system
-    /// and filters for the OBSBOT vendor id.
     #[must_use]
     pub fn list(&self) -> Vec<DeviceInfo> {
-        use nusb::MaybeFuture;
-        let Ok(devices) = nusb::list_devices().wait() else {
-            return Vec::new();
-        };
-        devices
-            .filter(|d: &nusb::DeviceInfo| d.vendor_id() == meet2::VENDOR_ID)
-            .filter_map(|d| classify(&d))
-            .collect()
+        #[cfg(target_os = "linux")]
+        {
+            linux::enumerate()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            Vec::new()
+        }
     }
 
     /// Find a connected camera by serial number.
@@ -62,20 +63,18 @@ impl Devices {
 
     /// Open a connected camera for control.
     pub fn open(&self, info: &DeviceInfo) -> Result<Device> {
-        use nusb::MaybeFuture;
-        let nusb_info = nusb::list_devices()
-            .wait()
-            .map_err(|e| crate::Error::Usb(format!("list_devices: {e}")))?
-            .find(|d: &nusb::DeviceInfo| {
-                d.vendor_id() == info.vendor_id
-                    && d.product_id() == info.product_id
-                    && (info.serial.is_empty() || d.serial_number() == Some(info.serial.as_str()))
-            })
-            .ok_or(crate::Error::NotFound)?;
-        let transport = match info.product_type {
-            ProductType::Meet2 => UsbTransport::open(nusb_info, meet2::VIDEO_CONTROL_INTERFACE)?,
-        };
-        Ok(Device::new(info.clone(), Box::new(transport)))
+        #[cfg(target_os = "linux")]
+        {
+            let transport = crate::transport::usb::UsbTransport::open(info)?;
+            Ok(Device::new(info.clone(), Box::new(transport)))
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = info;
+            Err(crate::Error::Unsupported(
+                "open: macOS and Windows transports are planned; only Linux is implemented",
+            ))
+        }
     }
 
     /// Subscribe to device add/remove and periodic status events.
@@ -89,17 +88,74 @@ impl Devices {
     }
 }
 
-fn classify(d: &nusb::DeviceInfo) -> Option<DeviceInfo> {
-    let product_type = match d.product_id() {
-        meet2::PRODUCT_ID_MEET2 => ProductType::Meet2,
-        _ => return None,
-    };
-    Some(DeviceInfo {
-        vendor_id: d.vendor_id(),
-        product_id: d.product_id(),
-        product_type,
-        serial: d.serial_number().unwrap_or_default().to_owned(),
-    })
+#[cfg(target_os = "linux")]
+mod linux {
+    use super::DeviceInfo;
+    use crate::devices::meet2;
+    use crate::types::ProductType;
+    use std::collections::HashMap;
+
+    /// Walk `/sys/class/video4linux/` and return one entry per OBSBOT USB
+    /// device. Multiple v4l2 nodes for the same camera are collapsed by
+    /// `(busnum, devnum)`.
+    pub(super) fn enumerate() -> Vec<DeviceInfo> {
+        let Ok(dir) = std::fs::read_dir("/sys/class/video4linux") else {
+            return Vec::new();
+        };
+        let mut by_dev: HashMap<(u8, u8), DeviceInfo> = HashMap::new();
+        for entry in dir.flatten() {
+            let device_link = entry.path().join("device");
+            let Ok(iface_dir) = std::fs::canonicalize(&device_link) else {
+                continue;
+            };
+            let Some(dev_dir) = iface_dir.parent() else {
+                continue;
+            };
+            let (Ok(busnum), Ok(devnum), Ok(vendor_id), Ok(product_id)) = (
+                read_u8(&dev_dir.join("busnum")),
+                read_u8(&dev_dir.join("devnum")),
+                read_u16_hex(&dev_dir.join("idVendor")),
+                read_u16_hex(&dev_dir.join("idProduct")),
+            ) else {
+                continue;
+            };
+            if vendor_id != meet2::VENDOR_ID {
+                continue;
+            }
+            let product_type = match product_id {
+                meet2::PRODUCT_ID_MEET2 => ProductType::Meet2,
+                _ => continue,
+            };
+            let serial = std::fs::read_to_string(dev_dir.join("serial"))
+                .unwrap_or_default()
+                .trim()
+                .to_owned();
+            by_dev.entry((busnum, devnum)).or_insert(DeviceInfo {
+                vendor_id,
+                product_id,
+                product_type,
+                serial,
+                busnum,
+                devnum,
+            });
+        }
+        by_dev.into_values().collect()
+    }
+
+    fn read_u8(path: &std::path::Path) -> crate::Result<u8> {
+        let s = std::fs::read_to_string(path)
+            .map_err(|e| crate::Error::Usb(format!("read {}: {e}", path.display())))?;
+        s.trim()
+            .parse()
+            .map_err(|_| crate::Error::Usb(format!("parse u8 from {}", path.display())))
+    }
+
+    fn read_u16_hex(path: &std::path::Path) -> crate::Result<u16> {
+        let s = std::fs::read_to_string(path)
+            .map_err(|e| crate::Error::Usb(format!("read {}: {e}", path.display())))?;
+        u16::from_str_radix(s.trim(), 16)
+            .map_err(|_| crate::Error::Usb(format!("parse u16 hex from {}", path.display())))
+    }
 }
 
 #[cfg(test)]

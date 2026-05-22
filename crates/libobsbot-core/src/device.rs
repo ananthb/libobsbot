@@ -501,6 +501,10 @@ mod tests {
             product_id: meet2::PRODUCT_ID_MEET2,
             product_type: ProductType::Meet2,
             serial: "MOCK".to_owned(),
+            #[cfg(target_os = "linux")]
+            busnum: 0,
+            #[cfg(target_os = "linux")]
+            devnum: 0,
         };
         (Device::new(info, transport), mock)
     }
@@ -523,6 +527,10 @@ mod tests {
             product_id: meet2::PRODUCT_ID_MEET2,
             product_type: ProductType::Meet2,
             serial: "MOCK".to_owned(),
+            #[cfg(target_os = "linux")]
+            busnum: 0,
+            #[cfg(target_os = "linux")]
+            devnum: 0,
         };
         (Device::new(info, transport), mock)
     }

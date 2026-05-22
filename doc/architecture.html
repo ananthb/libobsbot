@@ -46,9 +46,9 @@ touches USB.</p>
 |  Transport trait { uvc_set(entity, sel, ..),                  |
 |                    uvc_get(req, entity, sel, ..) }            |
 +---------------------------------------------------------------+
-|  nusb UVC class-specific control transfers                    |
-+---------------------------------------------------------------+
-|  nusb -> usbfs (Linux), IOKit (macOS), WinUSB (Windows)       |
+|  Per-platform driver (Linux today: V4L2 + UVCIOC ioctls on    |
+|  /dev/videoN via uvcvideo; macOS = IOKit, Windows = WinUSB    |
+|  are planned in-tree, each as its own Transport impl)         |
 +---------------------------------------------------------------+
 </div>
 
@@ -99,8 +99,8 @@ device is enough.</p>
       <code>uvcvideo</code> coexistence path
       (<code>UVCIOC_CTRL_QUERY</code> via <code>/dev/videoN</code>) so
       control transfers can land while Zoom/OBS/Cheese is streaming.</li>
-  <li><code>src/discovery.rs</code> picks up real hot-plug events from
-      <code>nusb</code>'s plug watcher.</li>
+  <li><code>src/discovery.rs</code> picks up real hot-plug events
+      (`udev` netlink on Linux; analogous APIs on macOS/Windows).</li>
 </ul>
 
 <h2>What is intentionally out of scope (v1)</h2>

@@ -12,9 +12,6 @@ pub(crate) const VENDOR_ID: u16 = 0x3564;
 /// OBSBOT Meet 2 USB product id.
 pub(crate) const PRODUCT_ID_MEET2: u16 = 0xfefb;
 
-/// `VideoControl` interface number that owns the extension unit.
-pub(crate) const VIDEO_CONTROL_INTERFACE: u8 = 0;
-
 /// Extension Unit entity id for the OBSBOT vendor XU on the Meet 2.
 ///
 /// The Meet 2's XU has GUID `{9a1e7291-6843-4683-6d92-39bc7906ee49}` and

@@ -29,7 +29,7 @@ The full descriptor dump is committed at `descriptors.txt` in this directory.
 
 The raw GUID bytes in the descriptor are
 `91 72 1e 9a 43 68 83 46 6d 92 39 bc 79 06 ee 49` — i.e. Microsoft
-encoding, which is what `nusb` and the UVC class expect when matching the XU.
+encoding, which is what the UVC class expects when matching the XU.
 
 ## Control-surface split (from `initial_apply.pcapng`)
 

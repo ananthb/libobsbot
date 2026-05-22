@@ -149,7 +149,7 @@ fn is_signed_2byte(cid: u32) -> bool {
 
 /// Dispatch a `(entity, selector)` SET to V4L2 when there's a mapping.
 /// Returns `None` if there is no V4L2 cid for this pair (caller should
-/// fall back to `nusb` or the XU path).
+/// fall back to the XU path).
 pub(super) fn v4l2_set(fd: &File, entity: u8, selector: u8, payload: &[u8]) -> Option<Result<()>> {
     if is_pantilt(entity, selector) {
         return Some(pantilt_set(fd, payload));
@@ -298,10 +298,10 @@ fn payload_to_i32(cid: u32, payload: &[u8]) -> i32 {
 /// Find and open the `/dev/videoN` belonging to the given USB device.
 ///
 /// Walks `/sys/class/video4linux/` and matches the parent USB device's
-/// `busnum` + `devnum` against the values from `nusb`. Multiple v4l2 nodes
-/// for the same UVC device are common (one per streaming interface); the
-/// lowest-numbered one wins for determinism, and all of them are equally
-/// valid handles for the v4l2 / UVC ioctls.
+/// `busnum` + `devnum` against the values from sysfs enumeration.
+/// Multiple v4l2 nodes for the same UVC device are common (one per
+/// streaming interface); the lowest-numbered one wins for determinism,
+/// and all of them are equally valid handles for the v4l2 / UVC ioctls.
 pub(super) fn open_for(usb_busnum: u8, usb_devnum: u8) -> Result<File> {
     let dir = std::fs::read_dir("/sys/class/video4linux")
         .map_err(|e| Error::Usb(format!("read /sys/class/video4linux: {e}")))?;
