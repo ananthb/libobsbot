@@ -2,7 +2,7 @@
 //! OBSBOT Meet 2 command table.
 //!
 //! Every constant in this module MUST be justified by a committed pcap under
-//! `doc/protocol/meet2/`, or — for the camera-level identifiers below — by
+//! `doc/protocol/meet2/`, or - for the camera-level identifiers below - by
 //! the committed `descriptors.txt` dump of `lsusb -v -d 3564:fefb`. See
 //! `CONTRIBUTING.md` for the sourcing rule.
 

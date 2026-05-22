@@ -2,20 +2,20 @@
 //! Crate-internal test scaffolding.
 //!
 //! Lets every module write tests against the same `Transport` mocks
-//! without re-implementing them. Keep this module narrow — it exists to
+//! without re-implementing them. Keep this module narrow - it exists to
 //! support tests, not to be a public testing-helpers crate.
 //!
 //! Patterns:
 //!
-//! - [`MockTransport`] — records the last `uvc_set` and zero-fills the
+//! - [`MockTransport`] - records the last `uvc_set` and zero-fills the
 //!   `uvc_get` output buffer. Useful for asserting which entity/selector/
 //!   payload a `Device` method calls without caring what comes back.
 //!
-//! - [`ScriptedTransport`] — returns pre-staged byte vectors from
+//! - [`ScriptedTransport`] - returns pre-staged byte vectors from
 //!   successive `uvc_get` calls. Useful for testing methods that issue
 //!   multiple GETs (e.g. range queries that ask for `Min` then `Max`).
 //!
-//! - [`device_with_mock`] / [`device_with_scripted_get`] — convenience
+//! - [`device_with_mock`] / [`device_with_scripted_get`] - convenience
 //!   constructors that wrap a `Transport` mock in a `Device` and (where
 //!   relevant) hand back an `Arc<MockTransport>` for assertions.
 
@@ -100,7 +100,7 @@ pub(crate) struct ScriptedTransport {
 }
 
 impl ScriptedTransport {
-    /// `responses` are consumed in the order written — first response goes
+    /// `responses` are consumed in the order written - first response goes
     /// to the first `uvc_get` call.
     pub(crate) fn new(mut responses: Vec<Vec<u8>>) -> Self {
         responses.reverse(); // Vec::pop pulls from the end.
@@ -130,14 +130,14 @@ impl Transport for ScriptedTransport {
 }
 
 /// Build a [`Device`] backed by a [`ScriptedTransport`]. Responses are
-/// consumed in insertion order — the first vector goes to the first
+/// consumed in insertion order - the first vector goes to the first
 /// `uvc_get` call.
 pub(crate) fn device_with_scripted_get(responses: Vec<Vec<u8>>) -> Device {
     let transport: Box<dyn Transport> = Box::new(ScriptedTransport::new(responses));
     Device::new(meet2_mock_info(), transport)
 }
 
-/// Convenience for `last_set` assertions — panics with a clear message if
+/// Convenience for `last_set` assertions - panics with a clear message if
 /// no SET has happened yet.
 pub(crate) fn last_set(mock: &Arc<MockTransport>) -> (u8, u8, Vec<u8>) {
     mock.last_set

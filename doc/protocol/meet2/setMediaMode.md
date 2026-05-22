@@ -1,4 +1,4 @@
-# setMediaMode.pcapng — XU mode-register: media mode
+# setMediaMode.pcapng - XU mode-register: media mode
 
 **Capture conditions**
 

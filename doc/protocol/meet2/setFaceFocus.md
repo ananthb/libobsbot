@@ -1,4 +1,4 @@
-# setFaceFocus.pcapng — face-based auto-focus uses the RPC channel, not the mode-register
+# setFaceFocus.pcapng - face-based auto-focus uses the RPC channel, not the mode-register
 
 **Capture conditions**
 
@@ -39,7 +39,7 @@ The same `(cmd_set=0x02, cmd_id=0x02, sub-header=36 04 00)` triple also
 appears in `initial_apply.pcapng` frame 728 (`bf 07 00 ...`) when the
 default config applied face-focus = off. Two values give two data points
 but the bit-level mapping from "on/off" to `bf fb` vs `bf 07` is not yet
-pinned — decoding it is part of the selector-0x02 RPC framing work in
+pinned - decoding it is part of the selector-0x02 RPC framing work in
 task #9.
 
 ## Code

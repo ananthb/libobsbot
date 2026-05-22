@@ -2,7 +2,7 @@
 //! Linux uvcvideo coexistence: V4L2 standard controls + UVC XU ioctls.
 //!
 //! On Linux the kernel rejects raw usbfs control transfers (`SUBMITURB`)
-//! addressed to an interface that another driver has claimed — i.e. always,
+//! addressed to an interface that another driver has claimed - i.e. always,
 //! for the `VideoControl` interface, because `uvcvideo` claims it the moment
 //! the camera is plugged in. The supported coexistence path is to open the
 //! camera's `/dev/videoN` node and use:
@@ -118,7 +118,7 @@ const _: () = assert!(core::mem::size_of::<V4l2Queryctrl>() == 68);
 /// `uvcvideo` exposes the control through the standard V4L2 API.
 ///
 /// `CT_PANTILT_ABSOLUTE_CONTROL` is handled by [`v4l2_set`] / [`v4l2_get`]
-/// directly — UVC packs pan and tilt into one 8-byte control, but V4L2
+/// directly - UVC packs pan and tilt into one 8-byte control, but V4L2
 /// splits them into [`V4L2_CID_PAN_ABSOLUTE`] and [`V4L2_CID_TILT_ABSOLUTE`].
 fn cid_for(entity: u8, selector: u8) -> Option<u32> {
     match (entity, selector) {
@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn cid_for_pantilt_returns_none_handled_separately() {
         // PAN/TILT is split across two V4L2 cids; cid_for must NOT return one
-        // — the special-case in v4l2_set/v4l2_get owns the dispatch.
+        // - the special-case in v4l2_set/v4l2_get owns the dispatch.
         assert_eq!(cid_for(1, 0x0d), None);
     }
 

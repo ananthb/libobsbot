@@ -28,7 +28,7 @@
         };
 
         # Nightly + miri + rust-src for the `miri` devShell. Not used in
-        # `checks` — building the miri sysroot inside nix's offline sandbox
+        # `checks` - building the miri sysroot inside nix's offline sandbox
         # would need the rust-lang std deps (rustc-demangle, etc.) vendored
         # alongside ours, which we don't pull in for normal builds. Run
         # miri locally instead: `nix develop .#miri -c cargo miri test
@@ -116,7 +116,7 @@
             '';
           };
 
-          # `nix develop .#miri` — nightly toolchain with miri + rust-src
+          # `nix develop .#miri` - nightly toolchain with miri + rust-src
           # pre-installed, ready to `cargo miri test`. Network-on, so the
           # sysroot can build the first time.
           miri = pkgs.mkShell {

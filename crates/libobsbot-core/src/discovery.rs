@@ -28,7 +28,7 @@ pub struct DeviceInfo {
 /// Owns the hot-plug watcher and the registry of connected cameras.
 ///
 /// Construct with [`Devices::new`]. Drop the handle to stop the watcher
-/// thread (no thread is spawned in v0.0.0 — added in M7).
+/// thread (no thread is spawned in v0.0.0 - added in M7).
 pub struct Devices {
     // No state in v0.0.0. The hot-plug watcher thread + status registry land
     // in M7. The struct is kept so that the public API is stable across the
@@ -79,7 +79,7 @@ impl Devices {
 
     /// Subscribe to device add/remove and periodic status events.
     ///
-    /// The receiver is currently never sent to — the hot-plug watcher lands
+    /// The receiver is currently never sent to - the hot-plug watcher lands
     /// in M7. Returned eagerly so consumers can wire their event loops now.
     #[must_use]
     pub fn events(&self) -> EventReceiver {

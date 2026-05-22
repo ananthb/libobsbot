@@ -8,7 +8,7 @@
 //!
 //! The trait expresses USB Video Class class-specific control transfers
 //! identified by `(entity_id, selector)`. Higher layers know which entity
-//! they target — Camera Terminal, Processing Unit, or vendor Extension Unit.
+//! they target - Camera Terminal, Processing Unit, or vendor Extension Unit.
 
 #[cfg(target_os = "linux")]
 pub mod usb;

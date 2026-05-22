@@ -2,7 +2,7 @@
 
 Tiny C++ driver that calls one OBSBOT libdev.so API per invocation, so
 a `dumpcap` on the matching `usbmon<bus>` interface sees exactly the
-wire bytes for that one method — nothing else.
+wire bytes for that one method - nothing else.
 
 This sits outside the cargo workspace because it links the closed-source
 `libdev.so` and is only used by maintainers when capturing pcaps for

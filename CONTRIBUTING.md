@@ -1,6 +1,6 @@
 # Contributing to libobsbot
 
-Welcome. Before you open a PR, read this — the sourcing rule is the most
+Welcome. Before you open a PR, read this - the sourcing rule is the most
 important policy in the project.
 
 ## The sourcing rule
@@ -10,7 +10,7 @@ libobsbot legally defensible, contributions must be derived only from observed
 USB wire behavior and public sources. The following inputs are off-limits when
 working on this codebase:
 
-- The contents of OBSBOT's `libdev.so`/`libdev.dylib`/`libdev.dll` — do not
+- The contents of OBSBOT's `libdev.so`/`libdev.dylib`/`libdev.dll` - do not
   disassemble, decompile, dump strings, run `nm`/`readelf -a`/`objdump` for
   anything beyond confirming the file is what it claims to be, or look at the
   symbol table.

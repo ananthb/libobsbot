@@ -3,7 +3,7 @@
 //!
 //! Regenerates `include/libobsbot.h` via cbindgen only when explicitly asked
 //! (`LIBOBSBOT_GEN_HEADER=1`). Crates.io users and ordinary `cargo build`
-//! invocations do not need a C toolchain — they get the committed header.
+//! invocations do not need a C toolchain - they get the committed header.
 
 use std::env;
 use std::path::PathBuf;

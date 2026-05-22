@@ -1,4 +1,4 @@
-# initial_apply.pcapng — first XU capture, exploratory
+# initial_apply.pcapng - first XU capture, exploratory
 
 **Capture conditions**
 
@@ -7,14 +7,14 @@
   bus 3 device 32, USB ID `3564:fefb`, `bcdDevice = 5.10`.
 - Capture interface: `usbmon3`.
 - Driver: `aaronsb/obsbot-camera-control@HEAD` `obsbot-cli` (non-interactive
-  mode, default config — no `~/.config/obsbot-control/settings.conf`).
+  mode, default config - no `~/.config/obsbot-control/settings.conf`).
 - Tool versions: `tshark` / `dumpcap` 4.6.5, kernel `usbmon`.
 
 The CLI applied a default configuration in one shot (mediaMode=Normal,
 HDR=off, FOV=Wide, faceAE=off, faceFocus=off, zoom=1x, pan/tilt=0,0,
 brightness=128, contrast=128, saturation=128, white-balance=auto). 1216
 packets, 429 KB on disk. **No individual selector can be promoted to a
-constant in `meet2.rs` from this capture alone** — per-method captures are
+constant in `meet2.rs` from this capture alone** - per-method captures are
 needed for the audit trail rule in `CONTRIBUTING.md`. This file documents
 the high-level structural observations.
 
@@ -30,7 +30,7 @@ OBSBOT splits control across **two distinct surfaces**, not just the XU:
    here.
 
 This invalidates the v0.0.0 method skeleton in `crates/libobsbot-core/src/device.rs`
-that routes every setter through `Transport::xu_set` — `brightness`,
+that routes every setter through `Transport::xu_set` - `brightness`,
 `contrast`, `saturation`, `zoom`, `pan/tilt`, `focus`, and the WB-auto
 toggle are standard UVC and should not touch the XU.
 
@@ -57,7 +57,7 @@ can normalise on their side).
 
 Filter: `usb.setup.wIndex == 0x0200`. Two selectors seen during this run:
 
-### Selector 0x02 — RPC-framed channel
+### Selector 0x02 - RPC-framed channel
 
 `SET_CUR` and `GET_CUR` always with `wLength = 60`. Payload has a recurring
 header:
@@ -67,7 +67,7 @@ offset 0:    0xAA              magic
 offset 1:    seq               monotonically rising per session
 offset 2:    sub-seq           per-message in a session
 offset 3:    0x00              reserved
-offset 4–5:  0x0C 0x00         small constant (12, LE — payload length?)
+offset 4–5:  0x0C 0x00         small constant (12, LE - payload length?)
 offset 6–7:  varies            looks like a CRC16
 offset 8:    0x0A              second magic
 offset 9:    cmd_set
@@ -80,7 +80,7 @@ Frame 728 is the only `SET` on this selector during the apply phase; the
 rest are device-info handshake (frames 190–274). Decoding individual
 `(cmd_set, cmd_id)` pairs needs targeted captures.
 
-### Selector 0x06 — single-byte mode register
+### Selector 0x06 - single-byte mode register
 
 Four consecutive `SET`s with payload `<value> 0x01 0x00×58` map 1:1 to the
 CLI's four enum setters, in source order:
@@ -100,7 +100,7 @@ will confirm or refute this.
 
 ## What goes into source from this capture
 
-Nothing additional — descriptor-derived constants are already in
+Nothing additional - descriptor-derived constants are already in
 `meet2.rs`. Code routes for brightness/contrast/saturation/zoom/pan-tilt/
 focus/wb-auto should be re-pointed at standard UVC selectors in a separate
 change (no pcap audit trail required; UVC 1.5 §A.9.4–5 is the source).
@@ -109,11 +109,11 @@ XU constants stay pending per-method pcaps.
 ## What captures to plan next
 
 1. Brightness sweep through `GET_MIN`, `GET_MAX`, `SET_CUR(min)`,
-   `SET_CUR(mid)`, `SET_CUR(max)` — confirms the standard UVC PU path
+   `SET_CUR(mid)`, `SET_CUR(max)` - confirms the standard UVC PU path
    end-to-end and gives a golden-byte test fixture.
 2. Single-control XU captures for `mediaMode`, `wdrR`, `fovU`, `faceAE`,
    `faceFocus`, `ai mode`, isolating each into its own pcap so the
    `<methodName>.pcapng` audit-trail rule applies cleanly.
-3. Status read — capture an OBSBOT XU GET that returns device serial /
+3. Status read - capture an OBSBOT XU GET that returns device serial /
    firmware (`libdev.so` reports SN `RMOMWYI1141LCV` and FW `4.4.6.1`; the
    capture will show which `cmd_set`/`cmd_id` returns these).

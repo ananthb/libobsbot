@@ -1,4 +1,4 @@
-# setFov.pcapng — XU mode-register: FOV preset
+# setFov.pcapng - XU mode-register: FOV preset
 
 **Capture conditions**
 

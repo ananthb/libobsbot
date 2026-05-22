@@ -2,7 +2,7 @@
 //! Rust implementation of the OBSBOT camera SDK.
 //!
 //! See `README.md` and `CONTRIBUTING.md` at the repository root. v0.0.0 is a
-//! skeleton — the public API is unstable and most methods return
+//! skeleton - the public API is unstable and most methods return
 //! [`Error::Unsupported`] until the protocol capture work begins.
 
 pub mod device;

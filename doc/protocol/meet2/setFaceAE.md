@@ -1,4 +1,4 @@
-# setFaceAE.pcapng — XU mode-register: face-based auto-exposure
+# setFaceAE.pcapng - XU mode-register: face-based auto-exposure
 
 **Capture conditions**
 

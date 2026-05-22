@@ -5,18 +5,18 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ProductType {
-    /// OBSBOT Meet 2 — the only model supported in v1.
+    /// OBSBOT Meet 2 - the only model supported in v1.
     Meet2,
 }
 
 /// Field-of-view preset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FovType {
-    /// ~86° — widest.
+    /// ~86° - widest.
     Wide,
-    /// ~78° — medium.
+    /// ~78° - medium.
     Medium,
-    /// ~65° — narrowest.
+    /// ~65° - narrowest.
     Narrow,
 }
 

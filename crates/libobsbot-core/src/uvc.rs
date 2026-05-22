@@ -3,7 +3,7 @@
 //!
 //! Source: USB Device Class Definition for Video Devices, Revision 1.5,
 //! sections A.9.4 (`CameraTerminal`) and A.9.5 (`ProcessingUnit`). These
-//! constants are normative — no audit-trail capture required.
+//! constants are normative - no audit-trail capture required.
 
 /// Camera Terminal entity id on the OBSBOT Meet 2 (matches descriptor).
 pub(crate) const CAMERA_TERMINAL: u8 = 1;

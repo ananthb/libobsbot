@@ -1,4 +1,4 @@
-# setWdr.pcapng — XU mode-register: WDR / HDR
+# setWdr.pcapng - XU mode-register: WDR / HDR
 
 **Capture conditions**
 
@@ -12,7 +12,7 @@
   CLI debug printed `cameraSetWdrR ... successfully` twice, once per toggle.
 
 The capture also covers the libdev.so handshake (frames 30, 38, 46, 54 are
-selector-0x02 RPC; not the subject of this method note — see `initial_apply.md`
+selector-0x02 RPC; not the subject of this method note - see `initial_apply.md`
 for that surface).
 
 ## Findings
@@ -39,7 +39,7 @@ offset 3..59 padding (0x00)
 The `01` at offset 1 is the same constant byte that appears in every
 selector-0x06 SET observed in `initial_apply.pcapng` (mediaMode, FOV,
 faceAE all carry it). Until a per-control capture exists for the other
-three, the meaning is recorded as "request flag" — likely a "set, ack"
+three, the meaning is recorded as "request flag" - likely a "set, ack"
 indicator.
 
 ## Code
@@ -60,13 +60,13 @@ and `Device::set_wdr` writes
 Selector 0x06 multiplexes at least four controls (mediaMode, WDR, FOV,
 faceAE). Per-control captures will confirm:
 
-- `setMediaMode.pcapng` — control id `0x00` expected (`MediaModeNormal`
-  set wrote `00 01 00` in `initial_apply.pcapng` — matches the
+- `setMediaMode.pcapng` - control id `0x00` expected (`MediaModeNormal`
+  set wrote `00 01 00` in `initial_apply.pcapng` - matches the
   `<value>` hypothesis only if `Normal = 0`).
-- `setFov.pcapng` — control id ≠ value; the wire `04 01 00` in
+- `setFov.pcapng` - control id ≠ value; the wire `04 01 00` in
   `initial_apply` for `cameraSetFovU(4)` (Wide) means the value lives in
   the first byte (and control id is implicit), or the format differs
   per control. A targeted single-FOV capture will distinguish.
-- `setFaceAE.pcapng` — same question.
+- `setFaceAE.pcapng` - same question.
 
 Until those land, only `MODE_WDR` is promoted into source.

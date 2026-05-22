@@ -21,7 +21,7 @@ use crate::{Error, Result};
 /// Opened OBSBOT camera.
 ///
 /// Obtain via [`crate::Devices::open`]. Dropping the handle releases the USB
-/// claim and stops the per-device status poller (no poller yet — lands in
+/// claim and stops the per-device status poller (no poller yet - lands in
 /// M7).
 pub struct Device {
     info: DeviceInfo,
@@ -315,7 +315,7 @@ impl Device {
     }
 
     /// Set field-of-view preset. XU mode-register control id
-    /// [`meet2::MODE_FOV`](crate::devices) — see
+    /// [`meet2::MODE_FOV`](crate::devices) - see
     /// `doc/protocol/meet2/setFov.md`.
     pub fn set_fov(&self, fov: FovType) -> Result<()> {
         let payload = meet2::mode_register_payload(meet2::MODE_FOV, encode_fov(fov));
@@ -324,7 +324,7 @@ impl Device {
     }
 
     /// Toggle face-based auto-exposure. XU mode-register control id
-    /// `0x03` — see `doc/protocol/meet2/setFaceAE.md`.
+    /// `0x03` - see `doc/protocol/meet2/setFaceAE.md`.
     pub fn set_face_ae(&self, on: bool) -> Result<()> {
         let payload = meet2::mode_register_payload(meet2::MODE_FACE_AE, u8::from(on));
         self.transport
@@ -342,7 +342,7 @@ impl Device {
             .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
     }
 
-    /// Select media mode. XU mode-register control id `0x00` — see
+    /// Select media mode. XU mode-register control id `0x00` - see
     /// `doc/protocol/meet2/setMediaMode.md`.
     pub fn set_media_mode(&self, mode: MediaMode) -> Result<()> {
         let payload = meet2::mode_register_payload(meet2::MODE_MEDIA_MODE, encode_media_mode(mode));
