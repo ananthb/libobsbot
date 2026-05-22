@@ -75,6 +75,55 @@ impl Device {
         unreachable!("uvc_get returns Unsupported until the transport lands");
     }
 
+    /// Ask the camera for its firmware version via the XU RPC channel.
+    /// Sends a canned request frame captured from `libdev.so`; see
+    /// `doc/protocol/meet2/crc-investigation.md` for why this is canned
+    /// rather than freshly synthesised. Returns a dotted-decimal
+    /// string like `"4.4.6.1"`.
+    ///
+    /// The canned request frame embeds the MAC of the captured Meet 2;
+    /// other physical units will need their own canned frame until the
+    /// CRC at offset 6-7 is decoded.
+    pub fn firmware_from_camera(&self) -> Result<String> {
+        self.transport.uvc_set(
+            meet2::XU_ENTITY_ID,
+            meet2::XU_SEL_RPC,
+            &meet2::RPC_REQUEST_FIRMWARE,
+        )?;
+        let mut reply = [0u8; meet2::RPC_FRAME_LEN];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            meet2::XU_ENTITY_ID,
+            meet2::XU_SEL_RPC,
+            &mut reply,
+        )?;
+        meet2::decode_firmware_reply(&reply).ok_or(Error::BadResponse {
+            selector: meet2::XU_SEL_RPC,
+            bytes: reply.to_vec(),
+        })
+    }
+
+    /// Ask the camera for its serial number via the XU RPC channel.
+    /// Same canned-request caveat as [`firmware_from_camera`](Self::firmware_from_camera).
+    pub fn serial_from_camera(&self) -> Result<String> {
+        self.transport.uvc_set(
+            meet2::XU_ENTITY_ID,
+            meet2::XU_SEL_RPC,
+            &meet2::RPC_REQUEST_SERIAL,
+        )?;
+        let mut reply = [0u8; meet2::RPC_FRAME_LEN];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            meet2::XU_ENTITY_ID,
+            meet2::XU_SEL_RPC,
+            &mut reply,
+        )?;
+        meet2::decode_serial_reply(&reply).ok_or(Error::BadResponse {
+            selector: meet2::XU_SEL_RPC,
+            bytes: reply.to_vec(),
+        })
+    }
+
     // ---- Camera Terminal (standard UVC §A.9.4) ------------------------------
 
     /// Set pan and tilt in normalised camera coordinates (-1.0 ..= 1.0).

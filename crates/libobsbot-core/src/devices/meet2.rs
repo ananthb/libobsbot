@@ -63,6 +63,109 @@ pub(crate) fn mode_register_payload(control_id: u8, value: u8) -> [u8; MODE_REGI
 /// Updated once the first hardware verification run lands.
 pub(crate) const MIN_FW: &str = "0.0.0";
 
+/// XU "RPC channel" selector. 60-byte SET/GET pairs carry an
+/// OBSBOT-proprietary command framing; see
+/// `doc/protocol/meet2/getStatus.md`.
+pub(crate) const XU_SEL_RPC: u8 = 0x02;
+
+/// Length of every `XU_SEL_RPC` SET request and GET reply.
+pub(crate) const RPC_FRAME_LEN: usize = 60;
+
+/// Offset of the `cmd_id` byte inside an `XU_SEL_RPC` frame.
+const RPC_CMD_ID_OFFSET: usize = 10;
+/// Offset of the `sub_cmd_id` byte.
+const RPC_SUB_CMD_ID_OFFSET: usize = 11;
+/// Offset of the little-endian u16 payload length.
+const RPC_LEN_OFFSET: usize = 12;
+/// Offset where the variable-length payload starts.
+const RPC_PAYLOAD_OFFSET: usize = 16;
+
+/// `XU_SEL_RPC` reply tuple `(cmd_id, sub_cmd_id)` that returns the
+/// 4-byte firmware version. `getStatus.pcapng` frame 33.
+const RPC_GET_FIRMWARE: (u8, u8) = (0x08, 0x04);
+
+/// `XU_SEL_RPC` reply tuple that returns the device serial as up to
+/// 14 ASCII bytes (NUL-padded). `getStatus.pcapng` frame 49.
+const RPC_GET_SERIAL: (u8, u8) = (0xC8, 0x18);
+
+/// Canned `XU_SEL_RPC` SET request that asks the camera for its
+/// firmware version. Captured at `doc/protocol/meet2/getStatus.pcapng`
+/// frame 28. Includes the CRC at offset 6-7 from the capture.
+///
+/// **Device-specific:** the MAC tail at offset 18-23
+/// (`ad b6 1b 98 dc 8d`) belongs to the captured unit. Until the CRC
+/// is cracked (see `doc/protocol/meet2/crc-investigation.md`), the
+/// canned bytes only address that one device; another Meet 2 would
+/// produce different CRC bytes and require a fresh capture.
+pub(crate) const RPC_REQUEST_FIRMWARE: [u8; RPC_FRAME_LEN] = [
+    0xaa, 0x01, 0x01, 0x00, 0x0c, 0x00, 0xc1, 0x50, 0x0a, 0x0d, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+/// Canned `XU_SEL_RPC` SET request that asks the camera for its
+/// serial number. Captured at `doc/protocol/meet2/getStatus.pcapng`
+/// frame 44. Same device-specific caveat as [`RPC_REQUEST_FIRMWARE`].
+pub(crate) const RPC_REQUEST_SERIAL: [u8; RPC_FRAME_LEN] = [
+    0xaa, 0x01, 0x03, 0x00, 0x0c, 0x00, 0x31, 0x53, 0x0a, 0x0d, 0xc8, 0x18, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d, 0x01, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+/// Decode an `XU_SEL_RPC` GET reply that's expected to carry the
+/// firmware version.
+pub(crate) fn decode_firmware_reply(buf: &[u8]) -> Option<String> {
+    let (cmd_id, sub_cmd_id, payload) = parse_rpc_reply(buf)?;
+    if (cmd_id, sub_cmd_id) != RPC_GET_FIRMWARE || payload.len() < 4 {
+        return None;
+    }
+    Some(format!(
+        "{}.{}.{}.{}",
+        payload[3], payload[2], payload[1], payload[0]
+    ))
+}
+
+/// Decode an `XU_SEL_RPC` GET reply that's expected to carry the
+/// device serial.
+pub(crate) fn decode_serial_reply(buf: &[u8]) -> Option<String> {
+    let (cmd_id, sub_cmd_id, payload) = parse_rpc_reply(buf)?;
+    if (cmd_id, sub_cmd_id) != RPC_GET_SERIAL {
+        return None;
+    }
+    let end = payload
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(payload.len());
+    let bytes = &payload[..end];
+    if bytes.iter().any(|&b| !b.is_ascii_graphic()) {
+        return None;
+    }
+    Some(core::str::from_utf8(bytes).ok()?.to_owned())
+}
+
+/// Pull (`cmd_id`, `sub_cmd_id`, payload) out of an `XU_SEL_RPC` GET
+/// reply buffer. Returns `None` if the magic or direction marker
+/// doesn't match a reply.
+fn parse_rpc_reply(buf: &[u8]) -> Option<(u8, u8, &[u8])> {
+    if buf.len() < RPC_PAYLOAD_OFFSET || buf[0] != 0xAA {
+        return None;
+    }
+    // Reply direction marker: 0x0D, 0x0A. Requests have these flipped.
+    if buf[8] != 0x0D || buf[9] != 0x0A {
+        return None;
+    }
+    let cmd_id = buf[RPC_CMD_ID_OFFSET];
+    let sub_cmd_id = buf[RPC_SUB_CMD_ID_OFFSET];
+    let len = u16::from_le_bytes([buf[RPC_LEN_OFFSET], buf[RPC_LEN_OFFSET + 1]]) as usize;
+    let end = RPC_PAYLOAD_OFFSET.checked_add(len)?;
+    if end > buf.len() {
+        return None;
+    }
+    Some((cmd_id, sub_cmd_id, &buf[RPC_PAYLOAD_OFFSET..end]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

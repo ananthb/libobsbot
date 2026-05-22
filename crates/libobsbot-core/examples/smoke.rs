@@ -58,6 +58,18 @@ fn main() {
         Ok(()) => println!("ok"),
         Err(e) => println!("{e}"),
     }
+
+    print!("firmware from camera (XU RPC, canned frame)... ");
+    match device.firmware_from_camera() {
+        Ok(s) => println!("{s}"),
+        Err(e) => println!("{e}"),
+    }
+
+    print!("serial from camera (XU RPC, canned frame)... ");
+    match device.serial_from_camera() {
+        Ok(s) => println!("{s}"),
+        Err(e) => println!("{e}"),
+    }
 }
 
 fn report(
