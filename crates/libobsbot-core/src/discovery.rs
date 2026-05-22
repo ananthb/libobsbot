@@ -62,7 +62,15 @@ impl Devices {
 
     /// Open a connected camera for control.
     pub fn open(&self, info: &DeviceInfo) -> Result<Device> {
-        let transport = UsbTransport::new(info.vendor_id, info.product_id);
+        let transport = match info.product_type {
+            ProductType::Meet2 => UsbTransport::new(
+                info.vendor_id,
+                info.product_id,
+                meet2::VIDEO_CONTROL_INTERFACE,
+                meet2::XU_ENTITY_ID,
+                meet2::XU_GUID,
+            ),
+        };
         Ok(Device::new(info.clone(), Box::new(transport)))
     }
 
