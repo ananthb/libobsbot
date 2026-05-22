@@ -345,7 +345,7 @@ impl Device {
     /// `0x06` with the WDR control id; see `doc/protocol/meet2/setWdr.md`
     /// for the wire format.
     pub fn set_wdr(&self, mode: WdrMode) -> Result<()> {
-        let payload = meet2::mode_register_payload(meet2::MODE_WDR, encode_wdr(mode));
+        let payload = meet2::mode_register_payload(meet2::MODE_WDR, &[encode_wdr(mode)]);
         self.transport
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
@@ -367,7 +367,7 @@ impl Device {
     /// [`meet2::MODE_FOV`](crate::devices) - see
     /// `doc/protocol/meet2/setFov.md`.
     pub fn set_fov(&self, fov: FovType) -> Result<()> {
-        let payload = meet2::mode_register_payload(meet2::MODE_FOV, encode_fov(fov));
+        let payload = meet2::mode_register_payload(meet2::MODE_FOV, &[encode_fov(fov)]);
         self.transport
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
@@ -375,7 +375,7 @@ impl Device {
     /// Toggle face-based auto-exposure. XU mode-register control id
     /// `0x03` - see `doc/protocol/meet2/setFaceAE.md`.
     pub fn set_face_ae(&self, on: bool) -> Result<()> {
-        let payload = meet2::mode_register_payload(meet2::MODE_FACE_AE, u8::from(on));
+        let payload = meet2::mode_register_payload(meet2::MODE_FACE_AE, &[u8::from(on)]);
         self.transport
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
@@ -394,7 +394,8 @@ impl Device {
     /// Select media mode. XU mode-register control id `0x00` - see
     /// `doc/protocol/meet2/setMediaMode.md`.
     pub fn set_media_mode(&self, mode: MediaMode) -> Result<()> {
-        let payload = meet2::mode_register_payload(meet2::MODE_MEDIA_MODE, encode_media_mode(mode));
+        let payload =
+            meet2::mode_register_payload(meet2::MODE_MEDIA_MODE, &[encode_media_mode(mode)]);
         self.transport
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
@@ -405,11 +406,13 @@ impl Device {
             .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_auto_framing(mode)])
     }
 
-    /// Master AI mode (on/off).
+    /// Set the AI master mode. XU mode-register control id `0x16`
+    /// with a u16 LE value; see `doc/protocol/meet2/setAiMode.md`.
     pub fn set_ai_mode(&self, mode: AiMode) -> Result<()> {
-        let on = matches!(mode, AiMode::On);
+        let value: u16 = encode_ai_mode(mode);
+        let payload = meet2::mode_register_payload(meet2::MODE_AI_MODE, &value.to_le_bytes());
         self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
     /// Enable AI auto-zoom while tracking.
@@ -520,6 +523,19 @@ fn encode_auto_framing(mode: AutoFramingMode) -> u8 {
         AutoFramingMode::SingleHeadShoulders => 0,
         AutoFramingMode::SingleUpperBody => 1,
         AutoFramingMode::Group => 2,
+    }
+}
+
+/// Maps our [`AiMode`] enum to the wire value seen in
+/// `setAiMode.pcapng`. Matches the SDK's `Device::AiWorkModeType`.
+fn encode_ai_mode(mode: AiMode) -> u16 {
+    match mode {
+        AiMode::None => 0,
+        AiMode::Group => 1,
+        AiMode::Human => 2,
+        AiMode::Hand => 3,
+        AiMode::WhiteBoard => 4,
+        AiMode::Desk => 5,
     }
 }
 
@@ -672,6 +688,22 @@ mod tests {
         let (_, _, payload) = last_set(&mock);
         // setWdr.pcapng frame 82: control_id=0x01, flag=0x01, value=0x00 (off).
         assert_eq!(payload[..3], [0x01, 0x01, 0x00]);
+    }
+
+    #[test]
+    fn ai_mode_routes_to_xu_mode_register_with_u16_value() {
+        // setAiMode.pcapng frame 56 (AI mode Human=2): 16 02 02 00 …
+        let (d, mock) = device_with_mock();
+        d.set_ai_mode(AiMode::Human).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        assert_eq!(payload[..4], [0x16, 0x02, 0x02, 0x00]);
+
+        d.set_ai_mode(AiMode::None).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        // setAiMode.pcapng frame 64: 16 02 00 00 …
+        assert_eq!(payload[..4], [0x16, 0x02, 0x00, 0x00]);
     }
 
     #[test]

@@ -7,7 +7,7 @@
 //! V4L2 ioctls on `/dev/videoN`; OBSBOT XU methods still return
 //! `Unsupported` until per-method captures land.
 
-use libobsbot_core::{Devices, Error, WdrMode};
+use libobsbot_core::{AiMode, Devices, Error, WdrMode};
 
 fn main() {
     if std::env::var_os("RUST_LOG").is_some() {
@@ -55,6 +55,12 @@ fn main() {
 
     print!("set WDR off (XU selector 0x06)... ");
     match device.set_wdr(WdrMode::Off) {
+        Ok(()) => println!("ok"),
+        Err(e) => println!("{e}"),
+    }
+
+    print!("set AI mode off (XU selector 0x06, control id 0x16)... ");
+    match device.set_ai_mode(AiMode::None) {
         Ok(()) => println!("ok"),
         Err(e) => println!("{e}"),
     }

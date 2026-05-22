@@ -55,13 +55,22 @@ pub enum AutoFramingMode {
     Group,
 }
 
-/// AI master mode (off / auto-framing / hand tracking, etc.).
+/// AI master mode. Matches `Device::AiWorkModeType` in the OBSBOT
+/// public SDK for the Tiny / Tiny SE / Meet 2 family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiMode {
     /// AI features off.
-    Off,
-    /// AI face/body tracking on.
-    On,
+    None,
+    /// Multi-person tracking.
+    Group,
+    /// Single-person tracking.
+    Human,
+    /// Hand-gesture tracking.
+    Hand,
+    /// Whiteboard mode.
+    WhiteBoard,
+    /// Desk mode.
+    Desk,
 }
 
 /// Media mode. Matches `Device::MediaMode` in the OBSBOT public SDK

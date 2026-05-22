@@ -46,16 +46,28 @@ pub(crate) const MODE_FACE_AE: u8 = 0x03;
 /// 2=65°/Narrow). `setFov.pcapng` frame 52 (value=1).
 pub(crate) const MODE_FOV: u8 = 0x04;
 
+/// `XU_SEL_MODE_REGISTER` control id for AI master mode. Value is a
+/// u16 LE matching the SDK's `Device::AiWorkModeType` enum (0=None,
+/// 1=Group, 2=Human, 3=Hand, 4=WhiteBoard, 5=Desk).
+/// `setAiMode.pcapng` frames 56 (value=2) + 64 (value=0).
+pub(crate) const MODE_AI_MODE: u8 = 0x16;
+
 /// Payload length for every `XU_SEL_MODE_REGISTER` SET observed so far.
 pub(crate) const MODE_REGISTER_PAYLOAD_LEN: usize = 60;
 
 /// Build a payload for `XU_SEL_MODE_REGISTER` from
-/// `(control_id, value)`. Layout: `[control_id, 0x01, value, 0x00 × 57]`.
-pub(crate) fn mode_register_payload(control_id: u8, value: u8) -> [u8; MODE_REGISTER_PAYLOAD_LEN] {
+/// `(control_id, value_bytes)`. Layout:
+/// `[control_id, value_bytes.len() as u8, value_bytes..., 0x00 padding]`.
+/// `value_bytes` must fit in the 58 remaining bytes; the WDR / FOV /
+/// faceAE / mediaMode controls use 1 byte, AI mode uses 2.
+pub(crate) fn mode_register_payload(
+    control_id: u8,
+    value_bytes: &[u8],
+) -> [u8; MODE_REGISTER_PAYLOAD_LEN] {
     let mut buf = [0u8; MODE_REGISTER_PAYLOAD_LEN];
     buf[0] = control_id;
-    buf[1] = 0x01;
-    buf[2] = value;
+    buf[1] = u8::try_from(value_bytes.len()).expect("mode-register value must fit in 255 bytes");
+    buf[2..2 + value_bytes.len()].copy_from_slice(value_bytes);
     buf
 }
 
@@ -171,16 +183,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mode_register_payload_layout_matches_wire() {
+    fn mode_register_payload_layout_matches_wire_one_byte() {
         // setWdr.pcapng frame 70 (HDR on): 01 01 01 00 …
-        let on = mode_register_payload(MODE_WDR, 1);
+        let on = mode_register_payload(MODE_WDR, &[1]);
         assert_eq!(on[..3], [0x01, 0x01, 0x01]);
         assert!(on[3..].iter().all(|&b| b == 0));
         assert_eq!(on.len(), 60);
 
         // setWdr.pcapng frame 82 (HDR off): 01 01 00 00 …
-        let off = mode_register_payload(MODE_WDR, 0);
+        let off = mode_register_payload(MODE_WDR, &[0]);
         assert_eq!(off[..3], [0x01, 0x01, 0x00]);
         assert!(off[3..].iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn mode_register_payload_layout_matches_wire_two_byte() {
+        // setAiMode.pcapng frame 56 (AI mode Human=2): 16 02 02 00 …
+        let on = mode_register_payload(MODE_AI_MODE, &2u16.to_le_bytes());
+        assert_eq!(on[..4], [0x16, 0x02, 0x02, 0x00]);
+        assert!(on[4..].iter().all(|&b| b == 0));
+
+        // setAiMode.pcapng frame 64 (AI mode None=0): 16 02 00 00 …
+        let off = mode_register_payload(MODE_AI_MODE, &0u16.to_le_bytes());
+        assert_eq!(off[..4], [0x16, 0x02, 0x00, 0x00]);
+        assert!(off[4..].iter().all(|&b| b == 0));
     }
 }
