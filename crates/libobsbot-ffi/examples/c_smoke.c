@@ -89,6 +89,11 @@ int main(void) {
     uint16_t kelvin = 0;
     EXPECT(obsbot_device_white_balance(NULL, &wb_mode, &kelvin), OBSBOT_ERR_NOT_FOUND, "white_balance");
 
+    int xu = 0;
+    EXPECT(obsbot_device_wdr(NULL, &xu),     OBSBOT_ERR_NOT_FOUND, "wdr");
+    EXPECT(obsbot_device_face_ae(NULL, &xu), OBSBOT_ERR_NOT_FOUND, "face_ae");
+    EXPECT(obsbot_device_ai_mode(NULL, &xu), OBSBOT_ERR_NOT_FOUND, "ai_mode");
+
     EXPECT(obsbot_devices_poll_event(NULL, &ev, 0),  OBSBOT_ERR_NOT_FOUND, "poll_event null handle");
     EXPECT(obsbot_devices_poll_event(d, NULL, 0),    OBSBOT_ERR_NOT_FOUND, "poll_event null out");
 

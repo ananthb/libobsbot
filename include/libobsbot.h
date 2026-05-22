@@ -124,7 +124,7 @@ typedef struct ObsbotStatus {
  * One event delivered by [`obsbot_devices_poll_event`]. For Added /
  * Removed events the `status` fields are zeroed; for Status events
  * every field is filled exactly as in
- * [`obsbot_device_status`](crate::obsbot_device_status).
+ * [`obsbot_device_status`].
  */
 typedef struct ObsbotEvent {
   /**
@@ -241,6 +241,23 @@ int obsbot_device_set_white_balance(struct ObsbotDevice *handle, int mode, uint1
  * HDR mode: 0 = Off, 1 = `Dol2To1`.
  */
 int obsbot_device_set_wdr(struct ObsbotDevice *handle, int mode);
+
+/**
+ * Read current HDR mode into `*out_mode` (same encoding as
+ * [`obsbot_device_set_wdr`]).
+ */
+int obsbot_device_wdr(struct ObsbotDevice *handle, int *out_mode);
+
+/**
+ * Read current face-AE state into `*out_on` (`0` = off, `1` = on).
+ */
+int obsbot_device_face_ae(struct ObsbotDevice *handle, int *out_on);
+
+/**
+ * Read current AI master mode into `*out_mode` (same encoding as
+ * [`obsbot_device_set_ai_mode`]).
+ */
+int obsbot_device_ai_mode(struct ObsbotDevice *handle, int *out_mode);
 
 /**
  * FOV preset: 0 = Wide, 1 = Medium, 2 = Narrow.

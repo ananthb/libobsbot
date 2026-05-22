@@ -306,6 +306,73 @@ pub unsafe extern "C" fn obsbot_device_set_wdr(handle: *mut ObsbotDevice, mode: 
     with_device(handle, |d| d.set_wdr(m))
 }
 
+/// Read current HDR mode into `*out_mode` (same encoding as
+/// [`obsbot_device_set_wdr`]).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_wdr(
+    handle: *mut ObsbotDevice,
+    out_mode: *mut c_int,
+) -> c_int {
+    if handle.is_null() || out_mode.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    match (*handle).0.wdr() {
+        Ok(libobsbot_core::WdrMode::Off) => {
+            *out_mode = 0;
+            OBSBOT_OK
+        }
+        Ok(libobsbot_core::WdrMode::Dol2To1) => {
+            *out_mode = 1;
+            OBSBOT_OK
+        }
+        Err(e) => map_error(&e),
+    }
+}
+
+/// Read current face-AE state into `*out_on` (`0` = off, `1` = on).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_face_ae(
+    handle: *mut ObsbotDevice,
+    out_on: *mut c_int,
+) -> c_int {
+    if handle.is_null() || out_on.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    match (*handle).0.face_ae() {
+        Ok(b) => {
+            *out_on = c_int::from(b);
+            OBSBOT_OK
+        }
+        Err(e) => map_error(&e),
+    }
+}
+
+/// Read current AI master mode into `*out_mode` (same encoding as
+/// [`obsbot_device_set_ai_mode`]).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_ai_mode(
+    handle: *mut ObsbotDevice,
+    out_mode: *mut c_int,
+) -> c_int {
+    if handle.is_null() || out_mode.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    match (*handle).0.ai_mode() {
+        Ok(m) => {
+            *out_mode = match m {
+                AiMode::None => 0,
+                AiMode::Group => 1,
+                AiMode::Human => 2,
+                AiMode::Hand => 3,
+                AiMode::WhiteBoard => 4,
+                AiMode::Desk => 5,
+            };
+            OBSBOT_OK
+        }
+        Err(e) => map_error(&e),
+    }
+}
+
 /// FOV preset: 0 = Wide, 1 = Medium, 2 = Narrow.
 #[no_mangle]
 pub unsafe extern "C" fn obsbot_device_set_fov(handle: *mut ObsbotDevice, fov: c_int) -> c_int {
