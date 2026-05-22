@@ -62,6 +62,23 @@ pub(crate) const MODE_AUTO_FRAMING: u8 = 0x0d;
 /// Payload length for every `XU_SEL_MODE_REGISTER` SET observed so far.
 pub(crate) const MODE_REGISTER_PAYLOAD_LEN: usize = 60;
 
+/// First byte of the 60-byte status blob the camera returns on a
+/// `GET_CUR` of `XU_SEL_MODE_REGISTER`. Hard-coded by firmware 4.4.6.1;
+/// re-verify on firmware updates.
+pub(crate) const STATUS_BLOB_MARKER: u8 = 0x27;
+
+/// Offset in the status blob of the WDR byte (`0` off / `1` on).
+pub(crate) const STATUS_WDR_OFFSET: usize = 6;
+
+/// Offset in the status blob of the face-AE byte (`0` off / `1` on).
+pub(crate) const STATUS_FACE_AE_OFFSET: usize = 7;
+
+/// Offset in the status blob of the AI master-mode byte. Matches the
+/// `AiMode` enum (0=None, 1=Group, 2=Human, 3=Hand, 4=WhiteBoard,
+/// 5=Desk). Setting `MediaMode::AutoFrame` or any `AutoFramingMode`
+/// updates this same byte to the equivalent AI mode value.
+pub(crate) const STATUS_AI_MODE_OFFSET: usize = 0x18;
+
 /// Build a payload for `XU_SEL_MODE_REGISTER` from
 /// `(control_id, value_bytes)`. Layout:
 /// `[control_id, value_bytes.len() as u8, value_bytes..., 0x00 padding]`.

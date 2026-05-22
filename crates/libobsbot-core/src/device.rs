@@ -420,17 +420,51 @@ impl Device {
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
-    /// Read current HDR mode. GET reply format pending capture; the body
-    /// reads one byte from the mode-register selector for now.
+    /// Read current HDR mode from the XU status blob (offset 6).
     pub fn wdr(&self) -> Result<WdrMode> {
-        let mut buf = [0u8; 1];
+        let blob = self.read_status_blob()?;
+        decode_wdr(blob[meet2::STATUS_WDR_OFFSET])
+    }
+
+    /// Whether face-based auto-exposure is on (XU status blob offset 7).
+    pub fn face_ae(&self) -> Result<bool> {
+        let blob = self.read_status_blob()?;
+        Ok(blob[meet2::STATUS_FACE_AE_OFFSET] != 0)
+    }
+
+    /// Current AI master mode (XU status blob offset 24).
+    ///
+    /// The Meet 2 collapses AI mode, auto-framing, and media-mode into
+    /// a single "AI work mode" enum at runtime - setting auto-framing
+    /// or `MediaMode::AutoFrame` changes this byte just as setting an
+    /// AI mode does. The value at offset 24 always reflects the most
+    /// recently selected mode, so `ai_mode()`, `auto_framing()`, and
+    /// `media_mode()` all read it but interpret it differently.
+    pub fn ai_mode(&self) -> Result<AiMode> {
+        let blob = self.read_status_blob()?;
+        decode_ai_mode(u16::from(blob[meet2::STATUS_AI_MODE_OFFSET]))
+    }
+
+    /// Read the 60-byte XU status blob the camera publishes via
+    /// `GET_CUR` on the mode-register selector. The blob starts with a
+    /// fixed marker byte (`0x27` on Meet 2 firmware 4.4.6.1); offsets
+    /// of individual fields are tracked under
+    /// `meet2::STATUS_*_OFFSET`.
+    fn read_status_blob(&self) -> Result<[u8; meet2::MODE_REGISTER_PAYLOAD_LEN]> {
+        let mut buf = [0u8; meet2::MODE_REGISTER_PAYLOAD_LEN];
         let _ = self.transport.uvc_get(
             UvcGet::Cur,
             meet2::XU_ENTITY_ID,
             meet2::XU_SEL_MODE_REGISTER,
             &mut buf,
         )?;
-        decode_wdr(buf[0])
+        if buf[0] != meet2::STATUS_BLOB_MARKER {
+            return Err(Error::BadResponse {
+                selector: meet2::XU_SEL_MODE_REGISTER,
+                bytes: buf.to_vec(),
+            });
+        }
+        Ok(buf)
     }
 
     /// Set field-of-view preset. XU mode-register control id
@@ -735,6 +769,21 @@ fn encode_ai_mode(mode: AiMode) -> u16 {
         AiMode::Hand => 3,
         AiMode::WhiteBoard => 4,
         AiMode::Desk => 5,
+    }
+}
+
+fn decode_ai_mode(v: u16) -> Result<AiMode> {
+    match v {
+        0 => Ok(AiMode::None),
+        1 => Ok(AiMode::Group),
+        2 => Ok(AiMode::Human),
+        3 => Ok(AiMode::Hand),
+        4 => Ok(AiMode::WhiteBoard),
+        5 => Ok(AiMode::Desk),
+        _ => Err(Error::BadResponse {
+            selector: meet2::XU_SEL_MODE_REGISTER,
+            bytes: v.to_le_bytes().to_vec(),
+        }),
     }
 }
 

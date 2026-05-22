@@ -118,6 +118,19 @@ fn main() {
         Ok(f) => println!("  focus = {f}"),
         Err(e) => println!("  focus: {e}"),
     }
+    println!("XU mode-register readbacks (after our SETs above):");
+    match device.wdr() {
+        Ok(m) => println!("  wdr           = {m:?}"),
+        Err(e) => println!("  wdr           : {e}"),
+    }
+    match device.face_ae() {
+        Ok(b) => println!("  face_ae       = {b}"),
+        Err(e) => println!("  face_ae       : {e}"),
+    }
+    match device.ai_mode() {
+        Ok(m) => println!("  ai_mode       = {m:?}"),
+        Err(e) => println!("  ai_mode       : {e}"),
+    }
 
     print!("status() snapshot... ");
     match device.status() {
