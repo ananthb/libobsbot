@@ -1,13 +1,13 @@
-name: New hardware / new capture
-description: Add support for an OBSBOT camera that isn't on the hardware list, or send a missing per-method pcap for one that is.
-title: "[hw] <model> <method or 'enumeration'>"
+name: "New hardware / new capture"
+description: "Add support for an OBSBOT camera that isn't on the hardware list, or send a missing per-method pcap for one that is."
+title: "[hw] MODEL: METHOD"
 labels: ["hardware"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping! Almost all the work of adding a new model
-        is the **packet capture** — once a `.pcapng` exists, the
+        Thanks for helping. Almost all the work of adding a new model
+        is the **packet capture**: once a `.pcapng` exists, the
         protocol decode and Rust wiring are straightforward follow-ups.
 
         - Capture instructions (Linux / macOS / Windows, exact
@@ -21,19 +21,19 @@ body:
   - type: input
     id: model
     attributes:
-      label: Camera model
-      description: e.g. "OBSBOT Tiny 2", "Tail Air"
+      label: "Camera model"
+      description: "e.g. OBSBOT Tiny 2, Tail Air."
     validations:
       required: true
 
   - type: input
     id: usb_id
     attributes:
-      label: USB vendor:product
+      label: "USB vendor:product"
       description: |
-        Linux: `lsusb | grep -i obsbot`
-        macOS: `system_profiler SPUSBDataType | grep -A 4 -i obsbot`
-        Windows: Device Manager → Properties → Details → Hardware Ids
+        Linux: run `lsusb | grep -i obsbot`.
+        macOS: run `system_profiler SPUSBDataType | grep -A 4 -i obsbot`.
+        Windows: Device Manager, Properties, Details, Hardware Ids.
       placeholder: "Bus 003 Device 015: ID 3564:fefb Remo Tech Co., Ltd. OBSBOT Meet 2"
     validations:
       required: true
@@ -41,13 +41,13 @@ body:
   - type: input
     id: firmware
     attributes:
-      label: Firmware version
-      description: Shown by OBSBOT Studio / Center, or by the libdev.so debug logs (`device info is: ... <firmware> ...`).
+      label: "Firmware version"
+      description: "Shown by OBSBOT Studio or Center, or by libdev.so debug logs."
 
   - type: dropdown
     id: host_os
     attributes:
-      label: OS the capture was taken on
+      label: "OS the capture was taken on"
       options:
         - Linux
         - macOS
@@ -58,13 +58,13 @@ body:
   - type: dropdown
     id: capture_tool
     attributes:
-      label: What was driving the camera during the capture?
+      label: "What was driving the camera during the capture?"
       options:
-        - "Linux — aaronsb/obsbot-camera-control (obsbot-cli or obsbot-gui)"
-        - "Linux — tools/meet2-exercise from this repo"
-        - "Linux — other libdev.so-based tool (say which in 'anything else')"
-        - "macOS — OBSBOT Studio"
-        - "Windows — OBSBOT Studio"
+        - "Linux: aaronsb/obsbot-camera-control (obsbot-cli or obsbot-gui)"
+        - "Linux: tools/meet2-exercise from this repo"
+        - "Linux: other libdev.so-based tool (say which in 'anything else')"
+        - "macOS: OBSBOT Studio"
+        - "Windows: OBSBOT Studio"
         - "Other (say which in 'anything else')"
     validations:
       required: true
@@ -72,8 +72,8 @@ body:
   - type: textarea
     id: method
     attributes:
-      label: Which API call / UI action did the capture cover?
-      description: One control per pcap is best. Use OBSBOT's API name when you know it.
+      label: "Which API call or UI action did the capture cover?"
+      description: "One control per pcap is best. Use OBSBOT's API name when you know it."
       placeholder: |
         cameraSetWdrR(1)    # HDR on
         cameraSetWdrR(0)    # HDR off
@@ -81,16 +81,16 @@ body:
   - type: textarea
     id: attached_capture
     attributes:
-      label: Attached capture(s)
+      label: "Attached capture(s)"
       description: |
         Drag the `.pcapng` into this issue (zip it if GitHub refuses
-        the extension). Name files `set<Method>.pcapng` (one capture
-        per file). If your camera isn't on the hardware matrix yet,
+        the extension). Name files `set<Method>.pcapng`, one capture
+        per file. If your camera isn't on the hardware matrix yet,
         also attach `descriptors.txt` (see the capture page for the
         commands).
 
   - type: textarea
     id: extra
     attributes:
-      label: Anything else
-      description: OS / kernel / OBSBOT-software version, anything surprising in the Wireshark dissection, etc.
+      label: "Anything else"
+      description: "OS, kernel, OBSBOT software version, anything surprising in the Wireshark dissection, etc."
