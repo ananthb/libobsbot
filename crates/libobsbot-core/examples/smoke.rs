@@ -105,6 +105,28 @@ fn main() {
         Err(e) => println!("{e}"),
     }
 
+    match device.pan_tilt() {
+        Ok((p, t)) => println!("  pan/tilt = ({p:+.3}, {t:+.3})"),
+        Err(e) => println!("  pan/tilt: {e}"),
+    }
+    match device.zoom() {
+        Ok(z) => println!("  zoom = {z}"),
+        Err(e) => println!("  zoom: {e}"),
+    }
+    match device.focus() {
+        Ok(f) => println!("  focus = {f}"),
+        Err(e) => println!("  focus: {e}"),
+    }
+
+    print!("status() snapshot... ");
+    match device.status() {
+        Ok(s) => println!(
+            "fw={} sn={} b={} c={} s={} pt=({:+.3},{:+.3}) z={}",
+            s.firmware, s.serial, s.brightness, s.contrast, s.saturation, s.pan, s.tilt, s.zoom
+        ),
+        Err(e) => println!("{e}"),
+    }
+
     // The poller runs on Cadence::Slow (2.5 s) by default. Bump to Fast
     // so we see a couple of samples during the smoke run, then drain them.
     device.set_status_cadence(Cadence::Fast);

@@ -113,11 +113,10 @@ impl Device {
     pub fn status(&self) -> Result<Status> {
         let firmware = self.firmware_from_camera().unwrap_or_default();
         let serial = self.serial_from_camera().unwrap_or_default();
-        Ok(Status {
-            firmware,
-            serial,
-            ..Status::default()
-        })
+        let mut snap = sample_status(self.transport.as_ref());
+        snap.firmware = firmware;
+        snap.serial = serial;
+        Ok(snap)
     }
 
     /// Ask the camera for its firmware version via the XU RPC channel.
@@ -230,6 +229,48 @@ impl Device {
             uvc::ct::FOCUS_ABSOLUTE,
             &v.to_le_bytes(),
         )
+    }
+
+    /// Read current pan + tilt in normalised camera coordinates
+    /// (-1.0 ..= 1.0). Inverse of [`set_pan_tilt`](Self::set_pan_tilt);
+    /// uses the same provisional arc-second scale.
+    pub fn pan_tilt(&self) -> Result<(f32, f32)> {
+        let mut buf = [0u8; 8];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::PANTILT_ABSOLUTE,
+            &mut buf,
+        )?;
+        let pan = i32::from_le_bytes(buf[..4].try_into().unwrap());
+        let tilt = i32::from_le_bytes(buf[4..].try_into().unwrap());
+        Ok((normalised_pantilt(pan), normalised_pantilt(tilt)))
+    }
+
+    /// Read current zoom value. Returns the raw u16 as f32 until
+    /// `GET_MIN`/`GET_MAX` are wired up to give a meaningful ratio.
+    pub fn zoom(&self) -> Result<f32> {
+        let mut buf = [0u8; 2];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::ZOOM_ABSOLUTE,
+            &mut buf,
+        )?;
+        Ok(f32::from(u16::from_le_bytes(buf)))
+    }
+
+    /// Read current focus value. Same provisional u16-as-f32 mapping
+    /// as [`set_focus`](Self::set_focus).
+    pub fn focus(&self) -> Result<f32> {
+        let mut buf = [0u8; 2];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::FOCUS_ABSOLUTE,
+            &mut buf,
+        )?;
+        Ok(f32::from(u16::from_le_bytes(buf)))
     }
 
     // ---- Processing Unit (standard UVC §A.9.5) ------------------------------
@@ -469,6 +510,15 @@ impl Device {
 // digital pan/tilt envelope. Real scale lands once GET_MIN/GET_MAX wire up.
 const PAN_TILT_PROVISIONAL_SCALE: f32 = 540_000.0;
 
+/// Wire-side arc-seconds -> normalised pan/tilt. The cast is fine for the
+/// camera's actual range (~±540k); clippy's `cast_precision_loss` is a
+/// red herring here since values outside f32's mantissa would be physical
+/// nonsense.
+#[allow(clippy::cast_precision_loss)]
+fn normalised_pantilt(arc_seconds: i32) -> f32 {
+    arc_seconds as f32 / PAN_TILT_PROVISIONAL_SCALE
+}
+
 /// Granularity for the poller's stop check between samples. The poll
 /// thread sleeps in chunks this small so [`Device::drop`] can interrupt
 /// it without waiting a full cadence period.
@@ -548,6 +598,33 @@ fn sample_status(transport: &dyn Transport) -> Status {
     }
     if let Ok(v) = read_pu_u16(transport, uvc::pu::SATURATION) {
         snap.saturation = i32::from(v);
+    }
+    let mut pt = [0u8; 8];
+    if transport
+        .uvc_get(
+            UvcGet::Cur,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::PANTILT_ABSOLUTE,
+            &mut pt,
+        )
+        .is_ok()
+    {
+        let pan = i32::from_le_bytes(pt[..4].try_into().unwrap());
+        let tilt = i32::from_le_bytes(pt[4..].try_into().unwrap());
+        snap.pan = normalised_pantilt(pan);
+        snap.tilt = normalised_pantilt(tilt);
+    }
+    let mut zoom = [0u8; 2];
+    if transport
+        .uvc_get(
+            UvcGet::Cur,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::ZOOM_ABSOLUTE,
+            &mut zoom,
+        )
+        .is_ok()
+    {
+        snap.zoom = f32::from(u16::from_le_bytes(zoom));
     }
     snap
 }
@@ -846,6 +923,30 @@ mod tests {
     #[test]
     fn decode_rejects_unknown_byte() {
         assert!(matches!(decode_wdr(99), Err(Error::BadResponse { .. })));
+    }
+
+    #[test]
+    fn pan_tilt_getter_decodes_two_i32_le() {
+        use crate::testing::device_with_scripted_get;
+        // 540_000 arc-seconds (= 1.0 after normalisation) is 0x0083d600.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&540_000_i32.to_le_bytes());
+        buf.extend_from_slice(&(-270_000_i32).to_le_bytes());
+        let device = device_with_scripted_get(vec![buf]);
+        let (pan, tilt) = device.pan_tilt().unwrap();
+        assert!((pan - 1.0).abs() < 1e-3);
+        assert!((tilt + 0.5).abs() < 1e-3);
+    }
+
+    #[test]
+    fn zoom_and_focus_getters_decode_u16_le() {
+        use crate::testing::device_with_scripted_get;
+        let device = device_with_scripted_get(vec![
+            vec![0x10, 0x00], // zoom = 16
+            vec![0xff, 0x00], // focus = 255
+        ]);
+        assert!((device.zoom().unwrap() - 16.0).abs() < f32::EPSILON);
+        assert!((device.focus().unwrap() - 255.0).abs() < f32::EPSILON);
     }
 
     #[test]
