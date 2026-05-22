@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protocol - libobsbot</title>
+<style>
+  :root { --bg: #fff; --fg: #1a1a1a; --muted: #666; --accent: #2b6cb0; --code-bg: #f5f5f5; --border: #e2e2e2; --max-w: 740px; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1a1a1a; --fg: #e0e0e0; --muted: #999; --accent: #63b3ed; --code-bg: #2d2d2d; --border: #404040; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
+  .container { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.3rem; }
+  p { margin: 0.5rem 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 0.75rem 0; font-size: 0.85em; }
+  pre code { background: none; padding: 0; }
+  nav { margin: 0.5rem 0 1.5rem; }
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.92em; }
+  th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="container">
+<nav><a href="index.html">&larr; libobsbot</a></nav>
+<h1>OBSBOT Meet 2 protocol</h1>
+
+<p>This is the human-readable view of the audit trail at
+<a href="https://github.com/ananthb/libobsbot/tree/main/docs/protocol/meet2"><code>docs/protocol/meet2/</code></a>.
+Every selector value and byte layout in
+<code>crates/libobsbot-core/src/devices/meet2.rs</code> must be backed
+by a committed <code>.pcapng</code> there, with a matching
+<code>.md</code> describing the bytes. The
+<a href="sourcing.html">sourcing rule</a> spells out what inputs are
+permitted.</p>
+
+<h2>Camera-level identifiers</h2>
+<p>Read from <code>lsusb -v -d 3564:fefb</code> against the unit used
+for capture. The full descriptor dump is in
+<a href="https://github.com/ananthb/libobsbot/blob/main/docs/protocol/meet2/descriptors.txt"><code>descriptors.txt</code></a>.</p>
+<table>
+  <tbody>
+    <tr><td>USB vendor id</td><td><code>0x3564</code> (Remo Tech Co., Ltd.)</td></tr>
+    <tr><td>USB product id (Meet 2)</td><td><code>0xfefb</code></td></tr>
+    <tr><td><code>bcdDevice</code></td><td>5.10</td></tr>
+    <tr><td>XU GUID</td><td><code>{9a1e7291-6843-4683-6d92-39bc7906ee49}</code></td></tr>
+    <tr><td><code>VideoControl</code> interface</td><td><code>0</code></td></tr>
+    <tr><td>XU entity id</td><td><code>2</code></td></tr>
+    <tr><td>XU control count</td><td><code>7</code></td></tr>
+    <tr><td>Serial string</td><td>not exposed in descriptor (<code>iSerial = 0</code>); reported by camera at runtime as <code>RMOMWYI1141LCV</code></td></tr>
+    <tr><td>Firmware (observed)</td><td><code>4.4.6.1</code></td></tr>
+  </tbody>
+</table>
+<p>The raw GUID bytes in the descriptor are
+<code>91 72 1e 9a 43 68 83 46 6d 92 39 bc 79 06 ee 49</code> &mdash;
+Microsoft encoding (first three fields little-endian, last eight bytes
+big-endian), which is what <code>nusb</code> and the UVC class expect
+when matching the XU.</p>
+
+<h2>Control-surface split</h2>
+<p>The camera exposes two control surfaces, only one of which is
+OBSBOT-specific. This came out of the first
+<a href="https://github.com/ananthb/libobsbot/blob/main/docs/protocol/meet2/initial_apply.pcapng">capture</a>
+of OBSBOT's <code>libdev.so</code> driving the device:</p>
+<table>
+  <thead>
+    <tr><th>Surface</th><th>Entity</th><th>Lives here</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Standard UVC <code>CameraTerminal</code></td>
+      <td class="num">1</td>
+      <td>zoom, pan/tilt, focus, exposure, roll &mdash; UVC 1.5 §A.9.4 selectors</td>
+    </tr>
+    <tr>
+      <td>Standard UVC <code>ProcessingUnit</code></td>
+      <td class="num">3</td>
+      <td>brightness, contrast, saturation, hue, sharpness, gain, WB temp + auto &mdash; UVC 1.5 §A.9.5 selectors</td>
+    </tr>
+    <tr>
+      <td>OBSBOT vendor extension</td>
+      <td class="num">2</td>
+      <td>mediaMode, HDR/WDR, FOV preset, face AE/focus, AI tracking, status &mdash; all proprietary</td>
+    </tr>
+  </tbody>
+</table>
+<p>Standard UVC paths do not require per-method <code>.pcapng</code> files
+&mdash; UVC 1.5 §A.9 is the source. OBSBOT XU paths do.</p>
+
+<h2>OBSBOT XU framing</h2>
+<p>Two distinct payload styles are visible on the XU during the first
+capture.</p>
+
+<h3>Selector 0x06 &mdash; single-byte mode register</h3>
+<p>Four consecutive <code>SET</code>s with payload
+<code>&lt;value&gt; 0x01 0x00&times;58</code> map 1:1 to four enum
+setters in the CLI's source order:</p>
+<table>
+  <thead>
+    <tr><th>First byte</th><th>API call</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>0x00</code></td><td><code>cameraSetMediaModeU(0)</code> (Normal)</td></tr>
+    <tr><td><code>0x01</code></td><td><code>cameraSetWdrR(1)</code> (HDR off)</td></tr>
+    <tr><td><code>0x04</code></td><td><code>cameraSetFovU(4)</code> (Wide)</td></tr>
+    <tr><td><code>0x03</code></td><td><code>cameraSetFaceAER(3)</code> (off)</td></tr>
+  </tbody>
+</table>
+<p>The selector is the same for four different controls. The trailing
+<code>0x01</code> is constant.
+<strong>Inference, not confirmation:</strong> the camera likely
+distinguishes controls by a <code>cmd_set</code> / <code>cmd_id</code>
+echoed through the preceding selector-0x02 RPC frame, not from selector
+0x06 alone. Targeted single-control captures will confirm or refute
+this.</p>
+
+<h3>Selector 0x02 &mdash; RPC-framed channel</h3>
+<p><code>SET_CUR</code> and <code>GET_CUR</code> always with
+<code>wLength = 60</code>. Payload has a recurring header:</p>
+<pre><code>offset 0:    0xAA              magic
+offset 1:    seq               monotonically rising per session
+offset 2:    sub-seq           per-message in a session
+offset 3:    0x00              reserved
+offset 4-5:  0x0C 0x00         small constant (12, LE - payload length?)
+offset 6-7:  varies            looks like a CRC16
+offset 8:    0x0A              second magic
+offset 9:    cmd_set
+offset 10:   cmd_id
+offset 11..  payload
+padded to 60 bytes with 0x00</code></pre>
+
+<h2>Capture procedure</h2>
+<ol>
+  <li>On Linux: <code>run0 modprobe usbmon &amp;&amp; run0 setfacl -m
+      u:$USER:r /dev/usbmon*</code>.</li>
+  <li>Plug in the Meet 2 and note bus/device with
+      <code>lsusb | grep -i obsbot</code>.</li>
+  <li>Launch Wireshark / dumpcap on <code>usbmon&lt;bus&gt;</code>
+      with capture filter
+      <code>usb.device_address == &lt;dev&gt;</code>.</li>
+  <li>Run an OBSBOT GUI/CLI built against
+      <code>libdev.so</code>.</li>
+  <li>Manipulate <strong>only</strong> the control under test &mdash; e.g.
+      slide brightness to min, mid, max in sequence.</li>
+  <li>Stop the capture, save it under
+      <code>docs/protocol/meet2/</code> as
+      <code>&lt;methodName&gt;.pcapng</code>.</li>
+  <li>In Wireshark, filter
+      <code>usb.bmRequestType == 0x21 &amp;&amp; usb.setup.bRequest == 0x01</code>
+      for <code>SET_CUR</code> and
+      <code>0xA1 &amp;&amp; 0x81</code> for
+      <code>GET_CUR</code>.</li>
+  <li>Record findings in
+      <code>&lt;methodName&gt;.md</code>.</li>
+</ol>
+
+</div>
+</body>
+</html>

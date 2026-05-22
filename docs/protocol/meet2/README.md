@@ -27,15 +27,6 @@ The full descriptor dump is committed at `descriptors.txt` in this directory.
 | Serial string          | not exposed (`iSerial = 0`); reported by camera at runtime as `RMOMWYI1141LCV` |
 | Firmware (observed)    | `4.4.6.1` on the capture unit            |
 
-Device layout (also in `descriptors.txt`):
-
-| Interface | Class           | Notes                                       |
-|-----------|-----------------|---------------------------------------------|
-| 0         | Video Control   | hosts the OBSBOT extension unit             |
-| 1         | Video Streaming | MJPEG + YUY2 (UVC 1.0)                      |
-| 2         | Audio Control   |                                             |
-| 3         | Audio Streaming | multiple alt settings                       |
-
 The raw GUID bytes in the descriptor are
 `91 72 1e 9a 43 68 83 46 6d 92 39 bc 79 06 ee 49` — i.e. Microsoft
 encoding, which is what `nusb` and the UVC class expect when matching the XU.

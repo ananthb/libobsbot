@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture - libobsbot</title>
+<style>
+  :root { --bg: #fff; --fg: #1a1a1a; --muted: #666; --accent: #2b6cb0; --code-bg: #f5f5f5; --border: #e2e2e2; --max-w: 740px; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1a1a1a; --fg: #e0e0e0; --muted: #999; --accent: #63b3ed; --code-bg: #2d2d2d; --border: #404040; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
+  .container { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.3rem; }
+  p { margin: 0.5rem 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 0.75rem 0; font-size: 0.85em; }
+  pre code { background: none; padding: 0; }
+  nav { margin: 0.5rem 0 1.5rem; }
+  .diagram { background: var(--code-bg); padding: 1.5rem; border-radius: 6px; margin: 1rem 0; font-family: monospace; white-space: pre; overflow-x: auto; font-size: 0.8em; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="container">
+<nav><a href="index.html">&larr; libobsbot</a></nav>
+<h1>Architecture</h1>
+
+<h2>Overview</h2>
+<p>libobsbot is a Rust workspace with two member crates:
+<code>libobsbot-core</code> (pure Rust library) and
+<code>libobsbot-ffi</code> (C ABI cdylib + staticlib generated from
+<code>libobsbot-core</code>). The core crate is the only crate that
+touches USB.</p>
+
+<h2>Layers</h2>
+<div class="diagram">+---------------------------------------------------------------+
+|  public Rust API (Devices, Device, Event, types)              |
++---------------------------------------------------------------+
+|  per-model command table (selector, encode, decode triples)   |
++---------------------------------------------------------------+
+|  Transport trait { uvc_set(entity, sel, ..),                  |
+|                    uvc_get(req, entity, sel, ..) }            |
++---------------------------------------------------------------+
+|  nusb UVC class-specific control transfers                    |
++---------------------------------------------------------------+
+|  nusb -> usbfs (Linux), IOKit (macOS), WinUSB (Windows)       |
++---------------------------------------------------------------+
+</div>
+
+<p>The narrowest layer &mdash; <code>Transport</code> &mdash; is the
+boundary that mocks plug into for encoding tests. Every selector and
+byte-layout constant in the per-model command table must be justified by
+a committed pcap; see the
+<a href="sourcing.html">sourcing rule</a>.</p>
+
+<h2>Control surfaces</h2>
+<p>The Meet 2 (and OBSBOT cameras generally) expose three UVC entities,
+all addressed through the same <code>Transport</code> API:</p>
+<ul>
+  <li><strong>Camera Terminal</strong> (entity id 1) for PTZ, zoom,
+      focus &mdash; standard UVC 1.5 §A.9.4 selectors.</li>
+  <li><strong>Processing Unit</strong> (entity id 3) for brightness,
+      contrast, saturation, white-balance temperature &mdash; standard
+      UVC 1.5 §A.9.5 selectors.</li>
+  <li><strong>OBSBOT vendor Extension Unit</strong> (entity id 2,
+      GUID <code>{9a1e7291-6843-4683-6d92-39bc7906ee49}</code>) for
+      proprietary behaviors (mediaMode, HDR, FOV preset, face AE/focus,
+      AI mode, status). All vendor-specific bytes live here.</li>
+</ul>
+<p>Standard UVC selectors are normative (the spec is the source); only
+the XU surface requires pcap audit-trail entries.</p>
+
+<h2>Threading</h2>
+<ul>
+  <li>The hot-plug watcher runs on one <code>std::thread</code> spawned
+      by <code>Devices::new</code>, pumping events into a
+      <code>crossbeam_channel</code>.</li>
+  <li>Each opened <code>Device</code> owns one status-poller thread that
+      issues a <code>uvc_get</code> for the XU status selector on a
+      2.5 s interval (slow mode) or 25 ms interval (fast mode), again
+      pumping into the same channel.</li>
+  <li>All public setter methods are synchronous. Getter methods that
+      map to <code>GET_CUR</code> are also synchronous.</li>
+</ul>
+<p>No <code>tokio</code> / async runtime. One long-lived thread per
+device is enough.</p>
+
+<h2>Where to expect change</h2>
+<ul>
+  <li><code>src/devices/meet2.rs</code> grows the OBSBOT-XU
+      <code>(selector, encode, decode)</code> table over M3 &ndash; M6.
+      Every entry references a pcap.</li>
+  <li><code>src/transport/usb.rs</code> picks up the Linux
+      <code>uvcvideo</code> coexistence path
+      (<code>UVCIOC_CTRL_QUERY</code> via <code>/dev/videoN</code>) so
+      control transfers can land while Zoom/OBS/Cheese is streaming.</li>
+  <li><code>src/discovery.rs</code> picks up real hot-plug events from
+      <code>nusb</code>'s plug watcher.</li>
+</ul>
+
+<h2>What is intentionally out of scope (v1)</h2>
+<ul>
+  <li>Models other than the Meet 2.</li>
+  <li>Firmware update, file transfer, recording controls, exposure modes
+      beyond brightness/contrast/saturation, gimbal-preset CRUD, AI
+      gesture, Bluetooth, WiFi, NDI/RTSP. Some of these use bulk
+      endpoints rather than the XU control channel and would require an
+      entirely separate transport layer. If v2 needs them, the
+      <code>Transport</code> trait will grow.</li>
+</ul>
+
+</div>
+</body>
+</html>

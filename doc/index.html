@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>libobsbot - Rust SDK for OBSBOT cameras</title>
+<style>
+  :root { --bg: #fff; --fg: #1a1a1a; --muted: #666; --accent: #2b6cb0; --code-bg: #f5f5f5; --border: #e2e2e2; --max-w: 740px; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1a1a1a; --fg: #e0e0e0; --muted: #999; --accent: #63b3ed; --code-bg: #2d2d2d; --border: #404040; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
+  .container { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+  h1 small { font-size: 1rem; color: var(--muted); font-weight: normal; }
+  h2 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  p { margin: 0.5rem 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 0.75rem 0; }
+  pre code { background: none; padding: 0; }
+  nav { display: flex; gap: 1.5rem; margin: 1rem 0; flex-wrap: wrap; }
+  nav a { padding: 0.4rem 0.8rem; background: var(--code-bg); border-radius: 4px; font-weight: 500; }
+  .badges { display: flex; gap: 0.5rem; margin: 0.5rem 0; flex-wrap: wrap; }
+  .badges img { height: 20px; }
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.95em; }
+  th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+  th { background: var(--code-bg); }
+  pre[class*="language-"], code[class*="language-"] { background: var(--code-bg) !important; }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-dark.min.css" media="(prefers-color-scheme: dark)">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js"></script>
+</head>
+<body>
+<div class="container">
+<h1>libobsbot <small>Rust SDK for OBSBOT cameras</small></h1>
+
+<div class="badges">
+  <a href="https://github.com/ananthb/libobsbot"><img src="https://img.shields.io/github/license/ananthb/libobsbot" alt="License"></a>
+  <a href="https://github.com/ananthb/libobsbot/releases"><img src="https://img.shields.io/github/v/release/ananthb/libobsbot?include_prereleases&amp;sort=semver" alt="Release"></a>
+</div>
+
+<p>libobsbot is a cross-platform Rust SDK for
+<a href="https://www.obsbot.com">OBSBOT</a> cameras. It implements the
+camera-control wire protocol from observed USB traffic and ships a
+stable C ABI so the same library can drive PTZ, image controls, white
+balance, HDR, FOV, face AE/focus, AI auto-framing, and audio controls
+from any GPL-compatible application.</p>
+
+<p><strong>Status:</strong> v0.0.0 &mdash; pre-release. The
+<a href="protocol.html">protocol capture phase</a> is underway. Today
+the workspace skeleton compiles, the standard UVC routing layer is in
+place, and the audit-trail format is established.</p>
+
+<nav>
+  <a href="architecture.html">Architecture</a>
+  <a href="protocol.html">Protocol</a>
+  <a href="sourcing.html">Sourcing rule</a>
+  <a href="api/libobsbot_core/index.html">API docs</a>
+  <a href="https://github.com/ananthb/libobsbot">Source</a>
+</nav>
+
+<h2>Scope (v1)</h2>
+<ul>
+  <li>One camera: <strong>OBSBOT Meet 2</strong></li>
+  <li>One transport: UVC class-specific control transfers</li>
+  <li>~30 methods covering the controls a useful GUI needs (PTZ, zoom,
+      focus, brightness/contrast/saturation, white balance, HDR, FOV,
+      face AE/focus, AI auto-framing, audio AGC) plus hot-plug + status
+      events</li>
+  <li>Three platforms: Linux, macOS, Windows (with caveats &mdash; see
+      below)</li>
+</ul>
+
+<p>The other ~225 SDK methods (firmware update, file transfer,
+network/WiFi, Bluetooth, NDI/RTSP, gimbal presets, AI gesture, exposure
+modes) are out of scope for v1.</p>
+
+<h2>Platforms</h2>
+<table>
+  <thead>
+    <tr><th>OS</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Linux</td>
+      <td>First-class. Goal: work while the camera is also open in
+          Zoom/OBS/Cheese &mdash; route through the <code>uvcvideo</code>
+          driver rather than detaching it.</td>
+    </tr>
+    <tr>
+      <td>macOS</td>
+      <td>Supported with one constraint: no other application may have the
+          camera open at the same time. AVFoundation/CoreMediaIO holds an
+          exclusive claim and IOKit will refuse arbitrary control
+          transfers.</td>
+    </tr>
+    <tr>
+      <td>Windows</td>
+      <td>The camera must be bound to WinUSB via
+          <a href="https://zadig.akeo.ie">Zadig</a>. Binding WinUSB removes
+          the camera from <code>usbvideo.sys</code>, so it becomes unusable
+          in Zoom/OBS until the driver is restored.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Provenance</h2>
+<p>The implementation is derived from observed USB wire behavior of a real
+OBSBOT Meet 2, plus public sources. Permitted inputs:</p>
+<ul>
+  <li>The public C++ header file <code>dev.hpp</code> (API shape only,
+      no implementation)</li>
+  <li>USB packet captures of the existing Linux <code>libdev.so</code>
+      talking to a real OBSBOT Meet 2 (Wireshark with
+      <code>usbmon</code>)</li>
+  <li>Prior public work
+      (<a href="https://github.com/samliddicott/meet4k">samliddicott/meet4k</a>,
+       <a href="https://github.com/taxfromdk/obsbot_tiny_reversing">taxfromdk/obsbot_tiny_reversing</a>,
+       <a href="https://github.com/aaronsb/obsbot-camera-control">aaronsb/obsbot-camera-control</a>)</li>
+  <li>OBSBOT's official OSC documentation</li>
+  <li>Public Linux kernel patches involving OBSBOT cameras</li>
+</ul>
+
+<p>Every selector / payload constant in the per-model command table
+references a committed <code>.pcapng</code> under
+<code>docs/protocol/&lt;model&gt;/</code>, and the commit that adds the
+constant cites the capture file. See the
+<a href="sourcing.html">sourcing rule</a> for the contributor policy.</p>
+
+<h2>Layout</h2>
+<pre><code class="language-bash">crates/libobsbot-core/  # Pure-Rust library (rlib). Published to crates.io.
+crates/libobsbot-ffi/   # C ABI cdylib + staticlib. Header generated by cbindgen.
+include/libobsbot.h     # Generated, committed, drift-checked in CI.
+examples/               # Smoke CLIs in Rust and C.
+tests/                  # Encoding tests + pcap replay.
+docs/protocol/meet2/    # Per-method markdown + pcap files. The audit trail.</code></pre>
+
+<h2>License</h2>
+<p>GPL-3.0-only. See the <a href="https://github.com/ananthb/libobsbot/blob/main/LICENSE">LICENSE</a>
+file. Note that linking to <code>liblibobsbot</code> from a
+non-GPL-compatible application is incompatible with this license.</p>
+
+</div>
+</body>
+</html>
