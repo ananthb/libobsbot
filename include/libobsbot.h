@@ -97,6 +97,107 @@ void obsbot_device_close(struct ObsbotDevice *handle);
 int obsbot_device_set_brightness(struct ObsbotDevice *handle, int32_t value);
 
 /**
+ * Read camera brightness into `*out_value`.
+ */
+int obsbot_device_brightness(struct ObsbotDevice *handle, int32_t *out_value);
+
+/**
+ * Set camera contrast. Returns one of the `OBSBOT_*` codes.
+ */
+int obsbot_device_set_contrast(struct ObsbotDevice *handle, int32_t value);
+
+/**
+ * Read camera contrast into `*out_value`.
+ */
+int obsbot_device_contrast(struct ObsbotDevice *handle, int32_t *out_value);
+
+/**
+ * Set camera saturation. Returns one of the `OBSBOT_*` codes.
+ */
+int obsbot_device_set_saturation(struct ObsbotDevice *handle, int32_t value);
+
+/**
+ * Read camera saturation into `*out_value`.
+ */
+int obsbot_device_saturation(struct ObsbotDevice *handle, int32_t *out_value);
+
+/**
+ * Set pan + tilt as normalised values in -1.0..=1.0.
+ */
+int obsbot_device_set_pan_tilt(struct ObsbotDevice *handle, float pan, float tilt);
+
+/**
+ * Set zoom as a u16-clamped objective focal length.
+ */
+int obsbot_device_set_zoom(struct ObsbotDevice *handle, float zoom);
+
+/**
+ * Set focus as a u16-clamped distance value.
+ */
+int obsbot_device_set_focus(struct ObsbotDevice *handle, float focus);
+
+/**
+ * White-balance mode: 0 = Auto, 1 = Manual. `kelvin` is honoured only
+ * for Manual; pass 0 with Auto.
+ */
+int obsbot_device_set_white_balance(struct ObsbotDevice *handle, int mode, uint16_t kelvin);
+
+/**
+ * HDR mode: 0 = Off, 1 = `Dol2To1`.
+ */
+int obsbot_device_set_wdr(struct ObsbotDevice *handle, int mode);
+
+/**
+ * FOV preset: 0 = Wide, 1 = Medium, 2 = Narrow.
+ */
+int obsbot_device_set_fov(struct ObsbotDevice *handle, int fov);
+
+/**
+ * Face-AE toggle: non-zero on, zero off.
+ */
+int obsbot_device_set_face_ae(struct ObsbotDevice *handle, int on);
+
+/**
+ * Face-focus toggle: non-zero on, zero off.
+ */
+int obsbot_device_set_face_focus(struct ObsbotDevice *handle, int on);
+
+/**
+ * Media mode: 0 = Normal, 1 = Background, 2 = `AutoFrame`.
+ */
+int obsbot_device_set_media_mode(struct ObsbotDevice *handle, int mode);
+
+/**
+ * Auto-framing sub-mode: 0 = Group, 1 = `SingleCloseUp`, 2 = `SingleUpperBody`.
+ */
+int obsbot_device_set_auto_framing(struct ObsbotDevice *handle, int mode);
+
+/**
+ * AI master mode: 0 = None, 1 = Group, 2 = Human, 3 = Hand,
+ * 4 = `WhiteBoard`, 5 = Desk.
+ */
+int obsbot_device_set_ai_mode(struct ObsbotDevice *handle, int mode);
+
+/**
+ * Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
+ */
+int obsbot_device_set_status_cadence(struct ObsbotDevice *handle, int cadence);
+
+/**
+ * Read the camera-reported firmware version into `out_buf` as a
+ * NUL-terminated string. `buf_len` must include space for the NUL.
+ * Returns `OBSBOT_ERR_OUT_OF_RANGE` if the buffer is too small.
+ */
+int obsbot_device_firmware(struct ObsbotDevice *handle, char *out_buf, uintptr_t buf_len);
+
+/**
+ * Read the camera-reported serial number into `out_buf` as a
+ * NUL-terminated string. Same buffer-size contract as
+ * [`obsbot_device_firmware`].
+ */
+int obsbot_device_serial(struct ObsbotDevice *handle, char *out_buf, uintptr_t buf_len);
+
+/**
  * Return the libobsbot version string (NUL-terminated, static lifetime).
  */
 const char *obsbot_version(void);
