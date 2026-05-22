@@ -1,59 +1,111 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! nusb-backed UVC class-specific control transfer transport.
 //!
-//! v0.0.0 carries the per-device identifiers but does not yet issue real
-//! control transfers — [`Transport::uvc_set`] and [`Transport::uvc_get`]
-//! return [`Error::Unsupported`]. The actual `control_in`/`control_out`
-//! calls land once the first per-method pcap confirms one selector end-to-end.
+//! Issues UVC class-specific `SET_CUR` and `GET_*` requests on endpoint 0
+//! against the opened nusb device. On Linux this routes through usbfs's
+//! `USBDEVFS_CONTROL`, which works even while the `uvcvideo` kernel driver
+//! holds the device — Zoom / OBS / Cheese can keep streaming.
+
+use std::time::Duration;
+
+use nusb::transfer::{ControlIn, ControlOut, ControlType, Recipient};
+use nusb::Device as NusbDevice;
+use nusb::MaybeFuture;
 
 use crate::transport::Transport;
 use crate::uvc::UvcGet;
 use crate::{Error, Result};
 
+/// UVC class-specific `SET_CUR` `bRequest`.
+const SET_CUR: u8 = 0x01;
+
+/// Timeout for synchronous control transfers. OBSBOT's libdev.so uses
+/// ~1 s in observed captures; we keep some margin.
+const CONTROL_TIMEOUT: Duration = Duration::from_millis(1500);
+
 /// USB transport for an opened camera.
 pub(crate) struct UsbTransport {
+    device: NusbDevice,
     vendor_id: u16,
     product_id: u16,
     video_control_interface: u8,
 }
 
 impl UsbTransport {
-    pub(crate) fn new(vendor_id: u16, product_id: u16, video_control_interface: u8) -> Self {
-        Self {
+    /// Open the given nusb device and prepare it for UVC class control transfers.
+    #[allow(clippy::needless_pass_by_value)] // nusb::DeviceInfo::open consumes self
+    pub(crate) fn open(info: nusb::DeviceInfo, video_control_interface: u8) -> Result<Self> {
+        let vendor_id = info.vendor_id();
+        let product_id = info.product_id();
+        let device = info
+            .open()
+            .wait()
+            .map_err(|e| Error::Usb(format!("open: {e}")))?;
+        Ok(Self {
+            device,
             vendor_id,
             product_id,
             video_control_interface,
-        }
+        })
+    }
+
+    fn w_index(&self, entity: u8) -> u16 {
+        (u16::from(entity) << 8) | u16::from(self.video_control_interface)
     }
 }
 
 impl Transport for UsbTransport {
-    fn uvc_set(&self, entity: u8, selector: u8, _payload: &[u8]) -> Result<()> {
-        tracing::debug!(
+    fn uvc_set(&self, entity: u8, selector: u8, payload: &[u8]) -> Result<()> {
+        let req = ControlOut {
+            control_type: ControlType::Class,
+            recipient: Recipient::Interface,
+            request: SET_CUR,
+            value: u16::from(selector) << 8,
+            index: self.w_index(entity),
+            data: payload,
+        };
+        tracing::trace!(
             vid = format_args!("{:04x}", self.vendor_id),
             pid = format_args!("{:04x}", self.product_id),
-            iface = self.video_control_interface,
             entity,
             selector = format_args!("{selector:#04x}"),
-            "uvc_set called before transport is implemented",
+            len = payload.len(),
+            "uvc_set",
         );
-        Err(Error::Unsupported(
-            "uvc_set: real control_out pending (see docs/protocol/meet2/)",
-        ))
+        self.device
+            .control_out(req, CONTROL_TIMEOUT)
+            .wait()
+            .map_err(|e| Error::Usb(format!("SET_CUR entity={entity} sel={selector:#04x}: {e}")))
     }
 
-    fn uvc_get(&self, req: UvcGet, entity: u8, selector: u8, _out: &mut [u8]) -> Result<usize> {
-        tracing::debug!(
+    fn uvc_get(&self, req: UvcGet, entity: u8, selector: u8, out: &mut [u8]) -> Result<usize> {
+        let length = u16::try_from(out.len())
+            .map_err(|_| Error::Usb(format!("uvc_get buffer too large: {}", out.len())))?;
+        let req_byte = req as u8;
+        let xfer = ControlIn {
+            control_type: ControlType::Class,
+            recipient: Recipient::Interface,
+            request: req_byte,
+            value: u16::from(selector) << 8,
+            index: self.w_index(entity),
+            length,
+        };
+        tracing::trace!(
             vid = format_args!("{:04x}", self.vendor_id),
             pid = format_args!("{:04x}", self.product_id),
-            iface = self.video_control_interface,
             entity,
             selector = format_args!("{selector:#04x}"),
             req = ?req,
-            "uvc_get called before transport is implemented",
+            length,
+            "uvc_get",
         );
-        Err(Error::Unsupported(
-            "uvc_get: real control_in pending (see docs/protocol/meet2/)",
-        ))
+        let bytes = self
+            .device
+            .control_in(xfer, CONTROL_TIMEOUT)
+            .wait()
+            .map_err(|e| Error::Usb(format!("{req:?} entity={entity} sel={selector:#04x}: {e}")))?;
+        let n = bytes.len().min(out.len());
+        out[..n].copy_from_slice(&bytes[..n]);
+        Ok(n)
     }
 }

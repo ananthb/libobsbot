@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Smoke CLI for manual verification against a real OBSBOT camera.
 //!
-//! v0.0.0 only proves the API compiles; every operation reports
-//! `Unsupported`. Real subcommands land starting at M3.
+//! Enumerates connected cameras, opens the first one, and reads a small set
+//! of standard UVC controls (brightness, contrast, saturation) plus their
+//! reported ranges. All of these route through real `nusb` control transfers
+//! to the Processing Unit; OBSBOT XU methods still return `Unsupported`
+//! until per-method captures land.
 
 use libobsbot_core::{Devices, Error};
 
@@ -15,20 +18,38 @@ fn main() {
     let list = devices.list();
     if list.is_empty() {
         println!("no OBSBOT cameras detected");
-    } else {
-        for info in &list {
-            println!(
-                "{:?} {:04x}:{:04x} sn={}",
-                info.product_type, info.vendor_id, info.product_id, info.serial
-            );
-        }
+        return;
+    }
+    for info in &list {
+        println!(
+            "{:?} {:04x}:{:04x} sn={}",
+            info.product_type, info.vendor_id, info.product_id, info.serial
+        );
     }
 
-    if let Some(info) = list.first() {
-        match devices.open(info) {
-            Ok(_d) => println!("opened {}", info.serial),
-            Err(Error::Unsupported(why)) => println!("open: unsupported ({why})"),
-            Err(e) => eprintln!("open: {e}"),
+    let info = list.first().unwrap();
+    let device = match devices.open(info) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("open: {e}");
+            std::process::exit(1);
         }
+    };
+    println!("opened {}", device.name());
+
+    report("brightness", device.brightness(), device.brightness_range());
+    report("contrast", device.contrast(), device.contrast_range());
+    report("saturation", device.saturation(), device.saturation_range());
+}
+
+fn report(
+    name: &str,
+    value: Result<i32, Error>,
+    range: Result<core::ops::RangeInclusive<i32>, Error>,
+) {
+    match (value, range) {
+        (Ok(v), Ok(r)) => println!("  {name} = {v}  (range {}..={})", r.start(), r.end()),
+        (Ok(v), Err(e)) => println!("  {name} = {v}  (range error: {e})"),
+        (Err(e), _) => println!("  {name}: {e}"),
     }
 }

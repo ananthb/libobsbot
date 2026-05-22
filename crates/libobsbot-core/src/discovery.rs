@@ -62,12 +62,18 @@ impl Devices {
 
     /// Open a connected camera for control.
     pub fn open(&self, info: &DeviceInfo) -> Result<Device> {
+        use nusb::MaybeFuture;
+        let nusb_info = nusb::list_devices()
+            .wait()
+            .map_err(|e| crate::Error::Usb(format!("list_devices: {e}")))?
+            .find(|d: &nusb::DeviceInfo| {
+                d.vendor_id() == info.vendor_id
+                    && d.product_id() == info.product_id
+                    && (info.serial.is_empty() || d.serial_number() == Some(info.serial.as_str()))
+            })
+            .ok_or(crate::Error::NotFound)?;
         let transport = match info.product_type {
-            ProductType::Meet2 => UsbTransport::new(
-                info.vendor_id,
-                info.product_id,
-                meet2::VIDEO_CONTROL_INTERFACE,
-            ),
+            ProductType::Meet2 => UsbTransport::open(nusb_info, meet2::VIDEO_CONTROL_INTERFACE)?,
         };
         Ok(Device::new(info.clone(), Box::new(transport)))
     }
