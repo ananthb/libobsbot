@@ -81,6 +81,8 @@ const V4L2_CID_CONTRAST: u32 = V4L2_CID_BASE + 1;
 const V4L2_CID_SATURATION: u32 = V4L2_CID_BASE + 2;
 const V4L2_CID_AUTO_WHITE_BALANCE: u32 = V4L2_CID_BASE + 12;
 const V4L2_CID_WHITE_BALANCE_TEMPERATURE: u32 = V4L2_CID_BASE + 26;
+const V4L2_CID_PAN_ABSOLUTE: u32 = V4L2_CID_CAMERA_CLASS_BASE + 8;
+const V4L2_CID_TILT_ABSOLUTE: u32 = V4L2_CID_CAMERA_CLASS_BASE + 9;
 const V4L2_CID_FOCUS_ABSOLUTE: u32 = V4L2_CID_CAMERA_CLASS_BASE + 10;
 const V4L2_CID_ZOOM_ABSOLUTE: u32 = V4L2_CID_CAMERA_CLASS_BASE + 13;
 
@@ -115,11 +117,9 @@ const _: () = assert!(core::mem::size_of::<V4l2Queryctrl>() == 68);
 /// Map a UVC `(entity, selector)` pair to a V4L2 control id, where
 /// `uvcvideo` exposes the control through the standard V4L2 API.
 ///
-/// `CT_PANTILT_ABSOLUTE_CONTROL` is intentionally absent — UVC packs pan
-/// and tilt into one 8-byte control, but V4L2 splits them into two
-/// separate `i32` controls. That requires a higher-level fanout that
-/// doesn't fit the single `(entity, selector)` → cid shape; pan/tilt
-/// falls through to the `nusb` fallback for now.
+/// `CT_PANTILT_ABSOLUTE_CONTROL` is handled by [`v4l2_set`] / [`v4l2_get`]
+/// directly — UVC packs pan and tilt into one 8-byte control, but V4L2
+/// splits them into [`V4L2_CID_PAN_ABSOLUTE`] and [`V4L2_CID_TILT_ABSOLUTE`].
 fn cid_for(entity: u8, selector: u8) -> Option<u32> {
     match (entity, selector) {
         // Processing Unit
@@ -135,6 +135,11 @@ fn cid_for(entity: u8, selector: u8) -> Option<u32> {
     }
 }
 
+/// True iff `(entity, selector)` is `CT_PANTILT_ABSOLUTE_CONTROL`.
+fn is_pantilt(entity: u8, selector: u8) -> bool {
+    entity == 1 && selector == 0x0d
+}
+
 /// True when the V4L2 control's 2-byte UVC payload is a signed `i16`.
 /// In UVC 1.5 PU, only `BRIGHTNESS` and `HUE` are signed (HUE not yet
 /// exposed in our `cid_for` table).
@@ -146,6 +151,9 @@ fn is_signed_2byte(cid: u32) -> bool {
 /// Returns `None` if there is no V4L2 cid for this pair (caller should
 /// fall back to `nusb` or the XU path).
 pub(super) fn v4l2_set(fd: &File, entity: u8, selector: u8, payload: &[u8]) -> Option<Result<()>> {
+    if is_pantilt(entity, selector) {
+        return Some(pantilt_set(fd, payload));
+    }
     let cid = cid_for(entity, selector)?;
     Some(v4l2_s_ctrl(fd, cid, payload_to_i32(cid, payload)))
 }
@@ -160,6 +168,9 @@ pub(super) fn v4l2_get(
     selector: u8,
     out: &mut [u8],
 ) -> Option<Result<usize>> {
+    if is_pantilt(entity, selector) {
+        return Some(pantilt_get(fd, req, out));
+    }
     let cid = cid_for(entity, selector)?;
     let result = match req {
         UvcGet::Cur => v4l2_g_ctrl(fd, cid).map(i32::to_le_bytes),
@@ -171,6 +182,50 @@ pub(super) fn v4l2_get(
         out[..n].copy_from_slice(&bytes[..n]);
         n
     }))
+}
+
+/// Split UVC's 8-byte `(i32 pan, i32 tilt)` payload across the two V4L2
+/// `PAN_ABSOLUTE` and `TILT_ABSOLUTE` controls.
+fn pantilt_set(fd: &File, payload: &[u8]) -> Result<()> {
+    if payload.len() != 8 {
+        return Err(Error::Usb(format!(
+            "CT_PANTILT_ABSOLUTE expects 8 bytes, got {}",
+            payload.len()
+        )));
+    }
+    let pan = i32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
+    let tilt = i32::from_le_bytes([payload[4], payload[5], payload[6], payload[7]]);
+    v4l2_s_ctrl(fd, V4L2_CID_PAN_ABSOLUTE, pan)?;
+    v4l2_s_ctrl(fd, V4L2_CID_TILT_ABSOLUTE, tilt)
+}
+
+/// Combine the two V4L2 PAN/TILT controls back into UVC's packed 8-byte
+/// `(i32 pan, i32 tilt)` representation. For `Min`/`Max`, each axis's own
+/// range is returned packed together.
+fn pantilt_get(fd: &File, req: UvcGet, out: &mut [u8]) -> Result<usize> {
+    if out.len() < 8 {
+        return Err(Error::Usb(format!(
+            "CT_PANTILT_ABSOLUTE response expects 8 bytes, got {}",
+            out.len()
+        )));
+    }
+    let (pan, tilt) = match req {
+        UvcGet::Cur => (
+            v4l2_g_ctrl(fd, V4L2_CID_PAN_ABSOLUTE)?,
+            v4l2_g_ctrl(fd, V4L2_CID_TILT_ABSOLUTE)?,
+        ),
+        UvcGet::Min => (
+            v4l2_queryctrl(fd, V4L2_CID_PAN_ABSOLUTE)?.minimum,
+            v4l2_queryctrl(fd, V4L2_CID_TILT_ABSOLUTE)?.minimum,
+        ),
+        UvcGet::Max => (
+            v4l2_queryctrl(fd, V4L2_CID_PAN_ABSOLUTE)?.maximum,
+            v4l2_queryctrl(fd, V4L2_CID_TILT_ABSOLUTE)?.maximum,
+        ),
+    };
+    out[..4].copy_from_slice(&pan.to_le_bytes());
+    out[4..8].copy_from_slice(&tilt.to_le_bytes());
+    Ok(8)
 }
 
 fn v4l2_g_ctrl(fd: &File, cid: u32) -> Result<i32> {

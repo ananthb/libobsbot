@@ -46,6 +46,12 @@ fn main() {
     report("brightness", device.brightness(), device.brightness_range());
     report("contrast", device.contrast(), device.contrast_range());
     report("saturation", device.saturation(), device.saturation_range());
+
+    print!("center pan/tilt... ");
+    match device.set_pan_tilt(0.0, 0.0) {
+        Ok(()) => println!("ok"),
+        Err(e) => println!("{e}"),
+    }
 }
 
 fn report(
