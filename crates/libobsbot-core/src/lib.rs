@@ -12,6 +12,7 @@ pub mod error;
 pub mod status;
 pub mod transport;
 pub mod types;
+pub(crate) mod uvc;
 
 pub use device::Device;
 pub use discovery::{DeviceInfo, Devices};

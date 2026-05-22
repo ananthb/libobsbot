@@ -67,8 +67,6 @@ impl Devices {
                 info.vendor_id,
                 info.product_id,
                 meet2::VIDEO_CONTROL_INTERFACE,
-                meet2::XU_ENTITY_ID,
-                meet2::XU_GUID,
             ),
         };
         Ok(Device::new(info.clone(), Box::new(transport)))

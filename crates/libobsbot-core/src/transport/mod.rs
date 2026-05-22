@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Transport abstraction for camera control transfers.
 //!
-//! The transport is the only thing the rest of the library knows about. Every
-//! method on [`crate::Device`] is a thin shim that calls into a `Transport`
-//! implementation. The default in-tree implementation is [`usb::UsbTransport`]
-//! (nusb-backed); test code substitutes a mock.
+//! Every method on [`crate::Device`] is a thin shim that calls into a
+//! `Transport` implementation. The default in-tree implementation is
+//! [`usb::UsbTransport`] (nusb-backed); test code substitutes a mock.
+//!
+//! The trait expresses USB Video Class class-specific control transfers
+//! identified by `(entity_id, selector)`. Higher layers know which entity
+//! they target — Camera Terminal, Processing Unit, or vendor Extension Unit.
 
 pub mod usb;
 
+use crate::uvc::UvcGet;
 use crate::Result;
 
 /// Camera control transport. One instance per opened device.
 pub(crate) trait Transport: Send + Sync {
-    /// Issue a UVC class-specific `SET_CUR` on the OBSBOT extension unit.
-    fn xu_set(&self, selector: u8, payload: &[u8]) -> Result<()>;
+    /// Issue a UVC class-specific `SET_CUR` on `(entity, selector)`.
+    fn uvc_set(&self, entity: u8, selector: u8, payload: &[u8]) -> Result<()>;
 
-    /// Issue a UVC class-specific `GET_CUR` on the OBSBOT extension unit.
-    /// Returns the number of bytes written to `out`.
-    fn xu_get(&self, selector: u8, out: &mut [u8]) -> Result<usize>;
+    /// Issue a UVC class-specific `GET_*` on `(entity, selector)` and write
+    /// the response into `out`. Returns the number of bytes written.
+    fn uvc_get(&self, req: UvcGet, entity: u8, selector: u8, out: &mut [u8]) -> Result<usize>;
 }

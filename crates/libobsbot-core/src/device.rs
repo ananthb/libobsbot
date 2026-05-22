@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Opened camera handle and the v1 method surface.
 //!
-//! Every Device method in v0.0.0 routes through the [`Transport`] trait. The
-//! transport returns [`Error::Unsupported`] until protocol capture lands; the
-//! method signatures and trait wiring are stable.
+//! Each method routes through the [`Transport`] trait. The transport
+//! returns [`Error::Unsupported`] until real `control_in`/`control_out`
+//! calls land; the method signatures and entity/selector routing are
+//! stable.
 
 use core::ops::RangeInclusive;
 
@@ -14,6 +15,7 @@ use crate::types::{
     AiMode, AutoFramingMode, FovType, MediaMode, ProductType, Status, TrackSpeed, WdrMode,
     WhiteBalanceMode,
 };
+use crate::uvc::{self, UvcGet};
 use crate::{Error, Result};
 
 /// Opened OBSBOT camera.
@@ -51,7 +53,7 @@ impl Device {
     }
 
     /// Firmware version string. Returns the build-time minimum until a real
-    /// camera response can be parsed (M2).
+    /// camera response can be parsed.
     #[must_use]
     pub fn firmware_version(&self) -> &str {
         &self.firmware
@@ -63,211 +65,330 @@ impl Device {
         self.info.product_type
     }
 
-    /// Read a fresh status snapshot synchronously.
+    /// Read a fresh status snapshot synchronously. Routes through the OBSBOT
+    /// XU since this is a proprietary aggregate; selector pending capture.
     pub fn status(&self) -> Result<Status> {
-        // 64 bytes is the maximum UVC class-specific GET_CUR payload.
         let mut buf = [0u8; 64];
-        let _ = self.transport.xu_get(0, &mut buf)?;
-        unreachable!("xu_get returns Unsupported until M2");
+        let _ = self
+            .transport
+            .uvc_get(UvcGet::Cur, meet2::XU_ENTITY_ID, 0, &mut buf)?;
+        unreachable!("uvc_get returns Unsupported until the transport lands");
     }
 
+    // ---- Camera Terminal (standard UVC §A.9.4) ------------------------------
+
     /// Set pan and tilt in normalised camera coordinates (-1.0 ..= 1.0).
+    ///
+    /// Encodes as `CT_PANTILT_ABSOLUTE_CONTROL`: i32 LE pan + i32 LE tilt in
+    /// arc-seconds (UVC 1.5 §4.2.2.1.14). The normalised-to-arc-second scale
+    /// is provisional until the camera's `GET_MIN`/`GET_MAX` are queried at
+    /// open time.
+    #[allow(clippy::cast_possible_truncation)]
     pub fn set_pan_tilt(&self, pan: f32, tilt: f32) -> Result<()> {
         if !(-1.0..=1.0).contains(&pan) || !(-1.0..=1.0).contains(&tilt) {
             return Err(Error::OutOfRange);
         }
+        let pan_i = (pan * PAN_TILT_PROVISIONAL_SCALE) as i32;
+        let tilt_i = (tilt * PAN_TILT_PROVISIONAL_SCALE) as i32;
         let mut payload = [0u8; 8];
-        payload[..4].copy_from_slice(&pan.to_le_bytes());
-        payload[4..].copy_from_slice(&tilt.to_le_bytes());
-        self.transport.xu_set(0, &payload)
+        payload[..4].copy_from_slice(&pan_i.to_le_bytes());
+        payload[4..].copy_from_slice(&tilt_i.to_le_bytes());
+        self.transport
+            .uvc_set(uvc::CAMERA_TERMINAL, uvc::ct::PANTILT_ABSOLUTE, &payload)
     }
 
     /// Set zoom as a ratio of the camera's optical range (1.0 ..= max).
+    ///
+    /// Encodes as `CT_ZOOM_ABSOLUTE_CONTROL`: u16 LE objective focal length
+    /// (UVC 1.5 §4.2.2.1.10). Mapping is provisional until `GET_MIN`/`GET_MAX`
+    /// are queried.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn set_zoom(&self, zoom: f32) -> Result<()> {
-        self.transport.xu_set(0, &zoom.to_le_bytes())
+        if !(0.0..=f32::from(u16::MAX)).contains(&zoom) {
+            return Err(Error::OutOfRange);
+        }
+        let v = zoom as u16;
+        self.transport.uvc_set(
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::ZOOM_ABSOLUTE,
+            &v.to_le_bytes(),
+        )
     }
 
-    /// Set zoom with a ramp speed (camera-defined units, 0.0 = no ramp).
+    /// Set zoom with a ramp speed.
+    ///
+    /// Standard UVC has no relative-zoom-with-speed selector that matches
+    /// this signature; route through the OBSBOT XU. Selector pending capture.
     pub fn set_zoom_with_speed(&self, zoom: f32, speed: f32) -> Result<()> {
         let mut payload = [0u8; 8];
         payload[..4].copy_from_slice(&zoom.to_le_bytes());
         payload[4..].copy_from_slice(&speed.to_le_bytes());
-        self.transport.xu_set(0, &payload)
+        self.transport.uvc_set(meet2::XU_ENTITY_ID, 0, &payload)
     }
 
     /// Set focus distance.
+    ///
+    /// Encodes as `CT_FOCUS_ABSOLUTE_CONTROL`: u16 LE (UVC 1.5 §4.2.2.1.6).
+    /// Mapping is provisional until `GET_MIN`/`GET_MAX` are queried.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn set_focus(&self, focus: f32) -> Result<()> {
-        self.transport.xu_set(0, &focus.to_le_bytes())
+        if !(0.0..=f32::from(u16::MAX)).contains(&focus) {
+            return Err(Error::OutOfRange);
+        }
+        let v = focus as u16;
+        self.transport.uvc_set(
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::FOCUS_ABSOLUTE,
+            &v.to_le_bytes(),
+        )
     }
 
-    /// Set brightness.
+    // ---- Processing Unit (standard UVC §A.9.5) ------------------------------
+
+    /// Set brightness. `PU_BRIGHTNESS_CONTROL`, i16 LE (UVC 1.5 §4.2.2.3.2).
     pub fn set_brightness(&self, value: i32) -> Result<()> {
-        self.transport.xu_set(0, &value.to_le_bytes())
+        let v = i16::try_from(value).map_err(|_| Error::OutOfRange)?;
+        self.transport
+            .uvc_set(uvc::PROCESSING_UNIT, uvc::pu::BRIGHTNESS, &v.to_le_bytes())
     }
 
     /// Read current brightness.
     pub fn brightness(&self) -> Result<i32> {
-        let mut buf = [0u8; 4];
-        let _ = self.transport.xu_get(0, &mut buf)?;
-        Ok(i32::from_le_bytes(buf))
+        let mut buf = [0u8; 2];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            uvc::PROCESSING_UNIT,
+            uvc::pu::BRIGHTNESS,
+            &mut buf,
+        )?;
+        Ok(i32::from(i16::from_le_bytes(buf)))
     }
 
     /// Reported brightness range.
     pub fn brightness_range(&self) -> Result<RangeInclusive<i32>> {
-        let mut buf = [0u8; 8];
-        let _ = self.transport.xu_get(0, &mut buf)?;
-        let lo = i32::from_le_bytes(buf[..4].try_into().unwrap());
-        let hi = i32::from_le_bytes(buf[4..].try_into().unwrap());
-        Ok(lo..=hi)
+        let lo = self.pu_get_i16(UvcGet::Min, uvc::pu::BRIGHTNESS)?;
+        let hi = self.pu_get_i16(UvcGet::Max, uvc::pu::BRIGHTNESS)?;
+        Ok(i32::from(lo)..=i32::from(hi))
     }
 
-    /// Set contrast.
+    /// Set contrast. `PU_CONTRAST_CONTROL`, u16 LE (UVC 1.5 §4.2.2.3.3).
     pub fn set_contrast(&self, value: i32) -> Result<()> {
-        self.transport.xu_set(0, &value.to_le_bytes())
+        let v = u16::try_from(value).map_err(|_| Error::OutOfRange)?;
+        self.transport
+            .uvc_set(uvc::PROCESSING_UNIT, uvc::pu::CONTRAST, &v.to_le_bytes())
     }
 
     /// Read current contrast.
     pub fn contrast(&self) -> Result<i32> {
-        let mut buf = [0u8; 4];
-        let _ = self.transport.xu_get(0, &mut buf)?;
-        Ok(i32::from_le_bytes(buf))
+        Ok(i32::from(self.pu_get_u16(UvcGet::Cur, uvc::pu::CONTRAST)?))
     }
 
     /// Reported contrast range.
     pub fn contrast_range(&self) -> Result<RangeInclusive<i32>> {
-        let mut buf = [0u8; 8];
-        let _ = self.transport.xu_get(0, &mut buf)?;
-        let lo = i32::from_le_bytes(buf[..4].try_into().unwrap());
-        let hi = i32::from_le_bytes(buf[4..].try_into().unwrap());
-        Ok(lo..=hi)
+        let lo = self.pu_get_u16(UvcGet::Min, uvc::pu::CONTRAST)?;
+        let hi = self.pu_get_u16(UvcGet::Max, uvc::pu::CONTRAST)?;
+        Ok(i32::from(lo)..=i32::from(hi))
     }
 
-    /// Set saturation.
+    /// Set saturation. `PU_SATURATION_CONTROL`, u16 LE (UVC 1.5 §4.2.2.3.7).
     pub fn set_saturation(&self, value: i32) -> Result<()> {
-        self.transport.xu_set(0, &value.to_le_bytes())
+        let v = u16::try_from(value).map_err(|_| Error::OutOfRange)?;
+        self.transport
+            .uvc_set(uvc::PROCESSING_UNIT, uvc::pu::SATURATION, &v.to_le_bytes())
     }
 
     /// Read current saturation.
     pub fn saturation(&self) -> Result<i32> {
-        let mut buf = [0u8; 4];
-        let _ = self.transport.xu_get(0, &mut buf)?;
-        Ok(i32::from_le_bytes(buf))
+        Ok(i32::from(
+            self.pu_get_u16(UvcGet::Cur, uvc::pu::SATURATION)?,
+        ))
     }
 
     /// Reported saturation range.
     pub fn saturation_range(&self) -> Result<RangeInclusive<i32>> {
-        let mut buf = [0u8; 8];
-        let _ = self.transport.xu_get(0, &mut buf)?;
-        let lo = i32::from_le_bytes(buf[..4].try_into().unwrap());
-        let hi = i32::from_le_bytes(buf[4..].try_into().unwrap());
-        Ok(lo..=hi)
+        let lo = self.pu_get_u16(UvcGet::Min, uvc::pu::SATURATION)?;
+        let hi = self.pu_get_u16(UvcGet::Max, uvc::pu::SATURATION)?;
+        Ok(i32::from(lo)..=i32::from(hi))
     }
+
+    // ---- White balance: hybrid (PU temperature, XU presets) -----------------
 
     /// Set white balance mode; the `kelvin` value is meaningful only when
     /// `mode` is [`WhiteBalanceMode::Manual`].
+    ///
+    /// Auto/Manual toggle goes through standard UVC; presets (Daylight,
+    /// Fluorescent, Tungsten) live on the OBSBOT XU and route there for now
+    /// with a placeholder selector until capture lands.
     pub fn set_white_balance(&self, mode: WhiteBalanceMode, kelvin: Option<u16>) -> Result<()> {
-        let mut payload = [0u8; 4];
-        payload[0] = encode_wb_mode(mode);
-        payload[2..].copy_from_slice(&kelvin.unwrap_or(0).to_le_bytes());
-        self.transport.xu_set(0, &payload)
+        match mode {
+            WhiteBalanceMode::Auto => self.transport.uvc_set(
+                uvc::PROCESSING_UNIT,
+                uvc::pu::WHITE_BALANCE_TEMPERATURE_AUTO,
+                &[1],
+            ),
+            WhiteBalanceMode::Manual => {
+                self.transport.uvc_set(
+                    uvc::PROCESSING_UNIT,
+                    uvc::pu::WHITE_BALANCE_TEMPERATURE_AUTO,
+                    &[0],
+                )?;
+                let k = kelvin.unwrap_or(6500);
+                self.transport.uvc_set(
+                    uvc::PROCESSING_UNIT,
+                    uvc::pu::WHITE_BALANCE_TEMPERATURE,
+                    &k.to_le_bytes(),
+                )
+            }
+            preset => {
+                let mut payload = [0u8; 4];
+                payload[0] = encode_wb_preset(preset);
+                self.transport.uvc_set(meet2::XU_ENTITY_ID, 0, &payload)
+            }
+        }
     }
 
     /// Read current white-balance mode and Kelvin value.
     pub fn white_balance(&self) -> Result<(WhiteBalanceMode, u16)> {
-        let mut buf = [0u8; 4];
-        let _ = self.transport.xu_get(0, &mut buf)?;
-        let mode = decode_wb_mode(buf[0])?;
-        let kelvin = u16::from_le_bytes(buf[2..].try_into().unwrap());
+        let mut auto_buf = [0u8; 1];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            uvc::PROCESSING_UNIT,
+            uvc::pu::WHITE_BALANCE_TEMPERATURE_AUTO,
+            &mut auto_buf,
+        )?;
+        let kelvin = self.pu_get_u16(UvcGet::Cur, uvc::pu::WHITE_BALANCE_TEMPERATURE)?;
+        let mode = if auto_buf[0] == 0 {
+            WhiteBalanceMode::Manual
+        } else {
+            WhiteBalanceMode::Auto
+        };
         Ok((mode, kelvin))
     }
 
     /// Presets reported by the camera as available.
+    ///
+    /// Presets are an OBSBOT extension; selector pending capture.
     pub fn white_balance_presets(&self) -> Result<Vec<WhiteBalanceMode>> {
         let mut buf = [0u8; 16];
-        let n = self.transport.xu_get(0, &mut buf)?;
+        let n = self
+            .transport
+            .uvc_get(UvcGet::Cur, meet2::XU_ENTITY_ID, 0, &mut buf)?;
         Ok(buf[..n]
             .iter()
             .copied()
-            .filter_map(|b| decode_wb_mode(b).ok())
+            .filter_map(|b| decode_wb_preset(b).ok())
             .collect())
     }
 
     /// Reported manual Kelvin range.
     pub fn white_balance_range(&self) -> Result<RangeInclusive<u16>> {
-        let mut buf = [0u8; 4];
-        let _ = self.transport.xu_get(0, &mut buf)?;
-        let lo = u16::from_le_bytes(buf[..2].try_into().unwrap());
-        let hi = u16::from_le_bytes(buf[2..].try_into().unwrap());
+        let lo = self.pu_get_u16(UvcGet::Min, uvc::pu::WHITE_BALANCE_TEMPERATURE)?;
+        let hi = self.pu_get_u16(UvcGet::Max, uvc::pu::WHITE_BALANCE_TEMPERATURE)?;
         Ok(lo..=hi)
     }
 
+    // ---- OBSBOT vendor extension (entity 2) ---------------------------------
+    //
+    // Every method below routes through the XU. Selector and payload layout
+    // are pending per-method captures under docs/protocol/meet2/.
+
     /// Set HDR mode.
     pub fn set_wdr(&self, mode: WdrMode) -> Result<()> {
-        self.transport.xu_set(0, &[encode_wdr(mode)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_wdr(mode)])
     }
 
     /// Read current HDR mode.
     pub fn wdr(&self) -> Result<WdrMode> {
         let mut buf = [0u8; 1];
-        let _ = self.transport.xu_get(0, &mut buf)?;
+        let _ = self
+            .transport
+            .uvc_get(UvcGet::Cur, meet2::XU_ENTITY_ID, 0, &mut buf)?;
         decode_wdr(buf[0])
     }
 
     /// Set field-of-view preset.
     pub fn set_fov(&self, fov: FovType) -> Result<()> {
-        self.transport.xu_set(0, &[encode_fov(fov)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_fov(fov)])
     }
 
     /// Toggle face-based auto-exposure.
     pub fn set_face_ae(&self, on: bool) -> Result<()> {
-        self.transport.xu_set(0, &[u8::from(on)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
     }
 
     /// Toggle face-based auto-focus.
     pub fn set_face_focus(&self, on: bool) -> Result<()> {
-        self.transport.xu_set(0, &[u8::from(on)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
     }
 
     /// Select media mode.
     pub fn set_media_mode(&self, mode: MediaMode) -> Result<()> {
-        self.transport.xu_set(0, &[encode_media_mode(mode)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_media_mode(mode)])
     }
 
     /// Configure auto-framing.
     pub fn set_auto_framing(&self, mode: AutoFramingMode) -> Result<()> {
-        self.transport.xu_set(0, &[encode_auto_framing(mode)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_auto_framing(mode)])
     }
 
     /// Master AI mode (on/off).
     pub fn set_ai_mode(&self, mode: AiMode) -> Result<()> {
         let on = matches!(mode, AiMode::On);
-        self.transport.xu_set(0, &[u8::from(on)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
     }
 
     /// Enable AI auto-zoom while tracking.
     pub fn set_ai_auto_zoom(&self, on: bool) -> Result<()> {
-        self.transport.xu_set(0, &[u8::from(on)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
     }
 
     /// Set AI tracking speed.
     pub fn set_track_speed(&self, speed: TrackSpeed) -> Result<()> {
-        self.transport.xu_set(0, &[encode_track_speed(speed)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_track_speed(speed)])
     }
 
     /// Toggle audio auto-gain control.
     pub fn set_audio_auto_gain(&self, on: bool) -> Result<()> {
-        self.transport.xu_set(0, &[u8::from(on)])
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
+    }
+
+    // ---- private helpers ----------------------------------------------------
+
+    fn pu_get_i16(&self, req: UvcGet, selector: u8) -> Result<i16> {
+        let mut buf = [0u8; 2];
+        let _ = self
+            .transport
+            .uvc_get(req, uvc::PROCESSING_UNIT, selector, &mut buf)?;
+        Ok(i16::from_le_bytes(buf))
+    }
+
+    fn pu_get_u16(&self, req: UvcGet, selector: u8) -> Result<u16> {
+        let mut buf = [0u8; 2];
+        let _ = self
+            .transport
+            .uvc_get(req, uvc::PROCESSING_UNIT, selector, &mut buf)?;
+        Ok(u16::from_le_bytes(buf))
     }
 }
 
-// ---- payload helpers ------------------------------------------------------
-//
-// These encode/decode functions sit between the public method signatures and
-// the transport. They are placeholders — the *byte values* below are not the
-// real ones the camera expects, only stand-ins until pcaps land. The function
-// shapes won't change.
+// Pan/tilt arc-second scale used while the device's reported range hasn't
+// been queried yet. 540_000 arc-seconds ≈ 150°, within the Meet 2's
+// digital pan/tilt envelope. Real scale lands once GET_MIN/GET_MAX wire up.
+const PAN_TILT_PROVISIONAL_SCALE: f32 = 540_000.0;
 
-fn encode_wb_mode(mode: WhiteBalanceMode) -> u8 {
+// ---- payload helpers (XU encodings still placeholders) ---------------------
+
+fn encode_wb_preset(mode: WhiteBalanceMode) -> u8 {
     match mode {
         WhiteBalanceMode::Auto => 0,
         WhiteBalanceMode::Manual => 1,
@@ -277,7 +398,7 @@ fn encode_wb_mode(mode: WhiteBalanceMode) -> u8 {
     }
 }
 
-fn decode_wb_mode(b: u8) -> Result<WhiteBalanceMode> {
+fn decode_wb_preset(b: u8) -> Result<WhiteBalanceMode> {
     match b {
         0 => Ok(WhiteBalanceMode::Auto),
         1 => Ok(WhiteBalanceMode::Manual),
@@ -349,16 +470,22 @@ mod tests {
 
     #[derive(Default)]
     struct MockTransport {
-        last_set: Mutex<Option<(u8, Vec<u8>)>>,
+        last_set: Mutex<Option<(u8, u8, Vec<u8>)>>,
     }
 
     impl Transport for MockTransport {
-        fn xu_set(&self, selector: u8, payload: &[u8]) -> Result<()> {
-            *self.last_set.lock().unwrap() = Some((selector, payload.to_vec()));
+        fn uvc_set(&self, entity: u8, selector: u8, payload: &[u8]) -> Result<()> {
+            *self.last_set.lock().unwrap() = Some((entity, selector, payload.to_vec()));
             Ok(())
         }
 
-        fn xu_get(&self, _selector: u8, out: &mut [u8]) -> Result<usize> {
+        fn uvc_get(
+            &self,
+            _req: UvcGet,
+            _entity: u8,
+            _selector: u8,
+            out: &mut [u8],
+        ) -> Result<usize> {
             for b in &mut *out {
                 *b = 0;
             }
@@ -369,6 +496,28 @@ mod tests {
     fn device_with_mock() -> (Device, std::sync::Arc<MockTransport>) {
         let mock = std::sync::Arc::new(MockTransport::default());
         let transport: Box<dyn Transport> = Box::new(MockTransport::default());
+        let info = DeviceInfo {
+            vendor_id: meet2::VENDOR_ID,
+            product_id: meet2::PRODUCT_ID_MEET2,
+            product_type: ProductType::Meet2,
+            serial: "MOCK".to_owned(),
+        };
+        (Device::new(info, transport), mock)
+    }
+
+    struct Forward(std::sync::Arc<MockTransport>);
+    impl Transport for Forward {
+        fn uvc_set(&self, entity: u8, selector: u8, payload: &[u8]) -> Result<()> {
+            self.0.uvc_set(entity, selector, payload)
+        }
+        fn uvc_get(&self, req: UvcGet, entity: u8, selector: u8, out: &mut [u8]) -> Result<usize> {
+            self.0.uvc_get(req, entity, selector, out)
+        }
+    }
+
+    fn device_with_observable_mock() -> (Device, std::sync::Arc<MockTransport>) {
+        let mock = std::sync::Arc::new(MockTransport::default());
+        let transport: Box<dyn Transport> = Box::new(Forward(mock.clone()));
         let info = DeviceInfo {
             vendor_id: meet2::VENDOR_ID,
             product_id: meet2::PRODUCT_ID_MEET2,
@@ -395,15 +544,118 @@ mod tests {
     }
 
     #[test]
-    fn pan_tilt_payload_layout_is_8_bytes() {
-        let (d, _) = device_with_mock();
-        // Mock transport accepts, so we just check the call doesn't panic and
-        // the in-range branch is exercised end-to-end.
-        assert!(d.set_pan_tilt(0.0, 0.0).is_ok());
+    fn pan_tilt_routes_to_camera_terminal() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_pan_tilt(0.0, 0.0).unwrap();
+        let (entity, selector, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, uvc::CAMERA_TERMINAL);
+        assert_eq!(selector, uvc::ct::PANTILT_ABSOLUTE);
+        assert_eq!(payload.len(), 8);
     }
 
     #[test]
-    fn wb_mode_encode_decode_round_trip() {
+    fn brightness_routes_to_processing_unit_with_i16_payload() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_brightness(42).unwrap();
+        let (entity, selector, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, uvc::PROCESSING_UNIT);
+        assert_eq!(selector, uvc::pu::BRIGHTNESS);
+        assert_eq!(payload, vec![42, 0]);
+    }
+
+    #[test]
+    fn brightness_out_of_i16_range_is_refused() {
+        let (d, _) = device_with_mock();
+        assert!(matches!(
+            d.set_brightness(i32::from(i16::MAX) + 1),
+            Err(Error::OutOfRange)
+        ));
+    }
+
+    #[test]
+    fn contrast_and_saturation_route_to_pu() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_contrast(100).unwrap();
+        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, uvc::PROCESSING_UNIT);
+        assert_eq!(sel, uvc::pu::CONTRAST);
+        assert_eq!(payload, vec![100, 0]);
+
+        d.set_saturation(150).unwrap();
+        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, uvc::PROCESSING_UNIT);
+        assert_eq!(sel, uvc::pu::SATURATION);
+        assert_eq!(payload, vec![150, 0]);
+    }
+
+    #[test]
+    fn zoom_routes_to_camera_terminal_with_u16_payload() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_zoom(2.5).unwrap();
+        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, uvc::CAMERA_TERMINAL);
+        assert_eq!(sel, uvc::ct::ZOOM_ABSOLUTE);
+        assert_eq!(payload, vec![2, 0]); // truncated u16 from 2.5
+    }
+
+    #[test]
+    fn focus_routes_to_camera_terminal() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_focus(100.0).unwrap();
+        let (entity, sel, _) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, uvc::CAMERA_TERMINAL);
+        assert_eq!(sel, uvc::ct::FOCUS_ABSOLUTE);
+    }
+
+    #[test]
+    fn wb_auto_routes_to_pu() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_white_balance(WhiteBalanceMode::Auto, None).unwrap();
+        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, uvc::PROCESSING_UNIT);
+        assert_eq!(sel, uvc::pu::WHITE_BALANCE_TEMPERATURE_AUTO);
+        assert_eq!(payload, vec![1]);
+    }
+
+    #[test]
+    fn wb_manual_writes_kelvin_to_pu() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_white_balance(WhiteBalanceMode::Manual, Some(5500))
+            .unwrap();
+        let (entity, sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, uvc::PROCESSING_UNIT);
+        assert_eq!(sel, uvc::pu::WHITE_BALANCE_TEMPERATURE);
+        assert_eq!(payload, 5500_u16.to_le_bytes().to_vec());
+    }
+
+    #[test]
+    fn wb_preset_routes_to_xu() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_white_balance(WhiteBalanceMode::Daylight, None)
+            .unwrap();
+        let (entity, _sel, _payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+    }
+
+    #[test]
+    fn wdr_routes_to_xu() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_wdr(WdrMode::Dol2To1).unwrap();
+        let (entity, _sel, payload) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+        assert_eq!(payload, vec![1]);
+    }
+
+    #[test]
+    fn fov_routes_to_xu() {
+        let (d, mock) = device_with_observable_mock();
+        d.set_fov(FovType::Wide).unwrap();
+        let (entity, _, _) = mock.last_set.lock().unwrap().clone().unwrap();
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+    }
+
+    #[test]
+    fn wb_preset_encode_decode_round_trip() {
         for mode in [
             WhiteBalanceMode::Auto,
             WhiteBalanceMode::Manual,
@@ -411,8 +663,8 @@ mod tests {
             WhiteBalanceMode::Fluorescent,
             WhiteBalanceMode::Tungsten,
         ] {
-            let b = encode_wb_mode(mode);
-            assert_eq!(decode_wb_mode(b).unwrap(), mode);
+            let b = encode_wb_preset(mode);
+            assert_eq!(decode_wb_preset(b).unwrap(), mode);
         }
     }
 
@@ -426,7 +678,7 @@ mod tests {
     #[test]
     fn decode_rejects_unknown_byte() {
         assert!(matches!(
-            decode_wb_mode(99),
+            decode_wb_preset(99),
             Err(Error::BadResponse { selector: 0, .. })
         ));
         assert!(matches!(decode_wdr(99), Err(Error::BadResponse { .. })));

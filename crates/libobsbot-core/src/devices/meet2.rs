@@ -15,17 +15,14 @@ pub(crate) const PRODUCT_ID_MEET2: u16 = 0xfefb;
 /// `VideoControl` interface number that owns the extension unit.
 pub(crate) const VIDEO_CONTROL_INTERFACE: u8 = 0;
 
-/// Extension Unit ID for the OBSBOT vendor XU on the Meet 2.
+/// Extension Unit entity id for the OBSBOT vendor XU on the Meet 2.
+///
+/// The Meet 2's XU has GUID `{9a1e7291-6843-4683-6d92-39bc7906ee49}` and
+/// exposes 7 controls. The GUID itself is documented in
+/// `docs/protocol/meet2/README.md` and `descriptors.txt`; we identify the
+/// device by `(vendor_id, product_id)` and address the XU by entity id.
 pub(crate) const XU_ENTITY_ID: u8 = 2;
 
-/// Raw 16-byte XU GUID as it appears in the descriptor.
-/// Microsoft GUID encoding: first three fields little-endian, last eight bytes
-/// big-endian. Renders as `{9a1e7291-6843-4683-6d92-39bc7906ee49}`.
-pub(crate) const XU_GUID: [u8; 16] = [
-    0x91, 0x72, 0x1e, 0x9a, 0x43, 0x68, 0x83, 0x46, 0x6d, 0x92, 0x39, 0xbc, 0x79, 0x06, 0xee, 0x49,
-];
-
 /// Minimum firmware version this build supports.
-/// `bcdDevice` reads 5.10 on the unit used for capture; the camera firmware
-/// version proper comes from a status read once that selector is captured.
+/// Updated once the first hardware verification run lands.
 pub(crate) const MIN_FW: &str = "0.0.0";
