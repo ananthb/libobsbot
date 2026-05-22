@@ -1,0 +1,23 @@
+[package]
+name = "libobsbot-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Clean-room Rust implementation of the OBSBOT camera SDK (core library)"
+
+[lib]
+name = "libobsbot_core"
+crate-type = ["rlib"]
+
+[dependencies]
+nusb.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+crossbeam-channel.workspace = true
+arrayvec.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,12 @@
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+.direnv/
+.devenv/
+.pre-commit-config.yaml
+
+*.pcapng.tmp
+docs/protocol/**/*.pcap
+
+.DS_Store

@@ -1,0 +1,23 @@
+[package]
+name = "libobsbot-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Clean-room Rust implementation of the OBSBOT camera SDK (C ABI)"
+
+[lib]
+name = "libobsbot"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+libobsbot-core.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+cbindgen = { version = "0.27", default-features = false }
+
+[lints]
+workspace = true
