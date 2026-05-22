@@ -50,6 +50,11 @@
 #define OBSBOT_ERR_BAD_RESPONSE -7
 
 /**
+ * Maximum string length (including NUL) for [`ObsbotStatus`] fields.
+ */
+#define OBSBOT_STR_MAX 64
+
+/**
  * Opaque handle to an opened OBSBOT camera.
  */
 typedef struct ObsbotDevice ObsbotDevice;
@@ -58,6 +63,47 @@ typedef struct ObsbotDevice ObsbotDevice;
  * Opaque handle to the hot-plug watcher / device registry.
  */
 typedef struct ObsbotDevices ObsbotDevices;
+
+/**
+ * Plain-old-data form of [`libobsbot_core::Status`] for C consumers.
+ * `firmware` and `serial` are NUL-terminated; strings longer than
+ * `OBSBOT_STR_MAX - 1` bytes are truncated. The unused tail is
+ * zero-padded.
+ */
+typedef struct ObsbotStatus {
+  /**
+   * Camera-reported firmware version, e.g. "4.4.6.1". NUL-terminated.
+   */
+  char firmware[OBSBOT_STR_MAX];
+  /**
+   * Camera-reported serial number. NUL-terminated.
+   */
+  char serial[OBSBOT_STR_MAX];
+  /**
+   * Brightness reported by the Processing Unit.
+   */
+  int32_t brightness;
+  /**
+   * Contrast reported by the Processing Unit.
+   */
+  int32_t contrast;
+  /**
+   * Saturation reported by the Processing Unit.
+   */
+  int32_t saturation;
+  /**
+   * Current zoom value (raw u16 cast to f32 for now).
+   */
+  float zoom;
+  /**
+   * Normalised pan in -1.0..=1.0.
+   */
+  float pan;
+  /**
+   * Normalised tilt in -1.0..=1.0.
+   */
+  float tilt;
+} ObsbotStatus;
 
 #ifdef __cplusplus
 extern "C" {
@@ -182,6 +228,29 @@ int obsbot_device_set_ai_mode(struct ObsbotDevice *handle, int mode);
  * Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
  */
 int obsbot_device_set_status_cadence(struct ObsbotDevice *handle, int cadence);
+
+/**
+ * Read current pan + tilt as normalised values in -1.0..=1.0.
+ */
+int obsbot_device_pan_tilt(struct ObsbotDevice *handle, float *out_pan, float *out_tilt);
+
+/**
+ * Read current zoom value.
+ */
+int obsbot_device_zoom(struct ObsbotDevice *handle, float *out);
+
+/**
+ * Read current focus value.
+ */
+int obsbot_device_focus(struct ObsbotDevice *handle, float *out);
+
+/**
+ * Read a synchronous status snapshot into `*out`. Returns
+ * `OBSBOT_ERR_NOT_FOUND` for NULL handles. Best-effort: individual
+ * read failures leave the corresponding field at its default value
+ * rather than failing the whole call.
+ */
+int obsbot_device_status(struct ObsbotDevice *handle, struct ObsbotStatus *out);
 
 /**
  * Read the camera-reported firmware version into `out_buf` as a

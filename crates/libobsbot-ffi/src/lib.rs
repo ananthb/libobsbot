@@ -297,6 +297,93 @@ pub unsafe extern "C" fn obsbot_device_set_status_cadence(
     OBSBOT_OK
 }
 
+/// Read current pan + tilt as normalised values in -1.0..=1.0.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_pan_tilt(
+    handle: *mut ObsbotDevice,
+    out_pan: *mut f32,
+    out_tilt: *mut f32,
+) -> c_int {
+    if handle.is_null() || out_pan.is_null() || out_tilt.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    match (*handle).0.pan_tilt() {
+        Ok((p, t)) => {
+            *out_pan = p;
+            *out_tilt = t;
+            OBSBOT_OK
+        }
+        Err(e) => map_error(&e),
+    }
+}
+
+/// Read current zoom value.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_zoom(handle: *mut ObsbotDevice, out: *mut f32) -> c_int {
+    read_into(handle, out, Device::zoom)
+}
+
+/// Read current focus value.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_focus(handle: *mut ObsbotDevice, out: *mut f32) -> c_int {
+    read_into(handle, out, Device::focus)
+}
+
+/// Plain-old-data form of [`libobsbot_core::Status`] for C consumers.
+/// `firmware` and `serial` are NUL-terminated; strings longer than
+/// `OBSBOT_STR_MAX - 1` bytes are truncated. The unused tail is
+/// zero-padded.
+#[repr(C)]
+pub struct ObsbotStatus {
+    /// Camera-reported firmware version, e.g. "4.4.6.1". NUL-terminated.
+    pub firmware: [c_char; OBSBOT_STR_MAX],
+    /// Camera-reported serial number. NUL-terminated.
+    pub serial: [c_char; OBSBOT_STR_MAX],
+    /// Brightness reported by the Processing Unit.
+    pub brightness: i32,
+    /// Contrast reported by the Processing Unit.
+    pub contrast: i32,
+    /// Saturation reported by the Processing Unit.
+    pub saturation: i32,
+    /// Current zoom value (raw u16 cast to f32 for now).
+    pub zoom: f32,
+    /// Normalised pan in -1.0..=1.0.
+    pub pan: f32,
+    /// Normalised tilt in -1.0..=1.0.
+    pub tilt: f32,
+}
+
+/// Maximum string length (including NUL) for [`ObsbotStatus`] fields.
+pub const OBSBOT_STR_MAX: usize = 64;
+
+/// Read a synchronous status snapshot into `*out`. Returns
+/// `OBSBOT_ERR_NOT_FOUND` for NULL handles. Best-effort: individual
+/// read failures leave the corresponding field at its default value
+/// rather than failing the whole call.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_status(
+    handle: *mut ObsbotDevice,
+    out: *mut ObsbotStatus,
+) -> c_int {
+    if handle.is_null() || out.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    let snap = match (*handle).0.status() {
+        Ok(s) => s,
+        Err(e) => return map_error(&e),
+    };
+    ptr::write_bytes(out, 0, 1);
+    copy_into_buf((*out).firmware.as_mut_ptr(), OBSBOT_STR_MAX, &snap.firmware);
+    copy_into_buf((*out).serial.as_mut_ptr(), OBSBOT_STR_MAX, &snap.serial);
+    (*out).brightness = snap.brightness;
+    (*out).contrast = snap.contrast;
+    (*out).saturation = snap.saturation;
+    (*out).zoom = snap.zoom;
+    (*out).pan = snap.pan;
+    (*out).tilt = snap.tilt;
+    OBSBOT_OK
+}
+
 /// Read the camera-reported firmware version into `out_buf` as a
 /// NUL-terminated string. `buf_len` must include space for the NUL.
 /// Returns `OBSBOT_ERR_OUT_OF_RANGE` if the buffer is too small.
@@ -351,6 +438,17 @@ unsafe fn read_into<T: Copy, F: FnOnce(&Device) -> Result<T, Error>>(
         }
         Err(e) => map_error(&e),
     }
+}
+
+/// Truncating copy of `s` into a fixed C buffer; the buffer is
+/// always NUL-terminated even if `s` is longer than `cap - 1`.
+unsafe fn copy_into_buf(buf: *mut c_char, cap: usize, s: &str) {
+    if cap == 0 {
+        return;
+    }
+    let n = s.len().min(cap - 1);
+    ptr::copy_nonoverlapping(s.as_ptr().cast::<c_char>(), buf, n);
+    *buf.add(n) = 0;
 }
 
 unsafe fn copy_string_out<F: FnOnce(&Device) -> Result<String, Error>>(

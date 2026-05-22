@@ -63,6 +63,17 @@ int main(void) {
     int32_t value = 0;
     EXPECT(obsbot_device_brightness(NULL, &value),   OBSBOT_ERR_NOT_FOUND, "brightness");
     EXPECT(obsbot_device_brightness(NULL, NULL),     OBSBOT_ERR_NOT_FOUND, "brightness null out");
+    EXPECT(obsbot_device_contrast(NULL, &value),     OBSBOT_ERR_NOT_FOUND, "contrast");
+    EXPECT(obsbot_device_saturation(NULL, &value),   OBSBOT_ERR_NOT_FOUND, "saturation");
+
+    float fval = 0.f;
+    EXPECT(obsbot_device_zoom(NULL, &fval),          OBSBOT_ERR_NOT_FOUND, "zoom");
+    EXPECT(obsbot_device_focus(NULL, &fval),         OBSBOT_ERR_NOT_FOUND, "focus");
+    EXPECT(obsbot_device_pan_tilt(NULL, &fval, &fval), OBSBOT_ERR_NOT_FOUND, "pan_tilt");
+
+    ObsbotStatus snap;
+    EXPECT(obsbot_device_status(NULL, &snap),        OBSBOT_ERR_NOT_FOUND, "status");
+    EXPECT(obsbot_device_status((ObsbotDevice *)0x1, NULL), OBSBOT_ERR_NOT_FOUND, "status null out");
 
     char buf[64];
     EXPECT(obsbot_device_firmware(NULL, buf, sizeof buf), OBSBOT_ERR_NOT_FOUND, "firmware");

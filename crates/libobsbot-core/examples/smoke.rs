@@ -9,6 +9,7 @@
 
 use libobsbot_core::{AiMode, AutoFramingMode, Cadence, Devices, Error, Event, WdrMode};
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     if std::env::var_os("RUST_LOG").is_some() {
         tracing_subscriber::fmt()
