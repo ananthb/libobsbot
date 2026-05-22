@@ -73,7 +73,10 @@ impl Transport for Forward {
 pub(crate) fn device_with_mock() -> (Device, Arc<MockTransport>) {
     let mock = Arc::new(MockTransport::default());
     let transport: Arc<dyn Transport> = Arc::new(Forward(mock.clone()));
-    (Device::new(meet2_mock_info(), transport, None), mock)
+    (
+        Device::new(meet2_mock_info(), transport, None, meet2::CAPTURED_MAC),
+        mock,
+    )
 }
 
 /// [`DeviceInfo`] suitable for tests against a fake Meet 2.
@@ -134,7 +137,7 @@ impl Transport for ScriptedTransport {
 /// `uvc_get` call.
 pub(crate) fn device_with_scripted_get(responses: Vec<Vec<u8>>) -> Device {
     let transport: Arc<dyn Transport> = Arc::new(ScriptedTransport::new(responses));
-    Device::new(meet2_mock_info(), transport, None)
+    Device::new(meet2_mock_info(), transport, None, meet2::CAPTURED_MAC)
 }
 
 /// Convenience for `last_set` assertions - panics with a clear message if

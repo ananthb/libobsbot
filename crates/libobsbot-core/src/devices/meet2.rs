@@ -114,11 +114,10 @@ const RPC_GET_FIRMWARE: (u8, u8) = (0x08, 0x04);
 /// 14 ASCII bytes (NUL-padded). `getStatus.pcapng` frame 49.
 const RPC_GET_SERIAL: (u8, u8) = (0xC8, 0x18);
 
-/// MAC tail of the originally captured Meet 2 (USB iSerial is unset,
-/// so the device-specific MAC suffix lives only in the camera's RPC
-/// `device-hash` reply). Used as a default seed for the per-device MAC
-/// in `Device`; the real value is learned at open time via
-/// [`build_rpc_handshake_macquery`].
+/// MAC tail of the originally captured Meet 2. Used only by unit
+/// tests (real opens learn the MAC from the camera via
+/// [`build_mac_query_request`]).
+#[cfg(test)]
 pub(crate) const CAPTURED_MAC: [u8; 6] = [0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d];
 
 /// Pinned test fixture: the captured firmware-request frame.
@@ -285,6 +284,29 @@ pub(crate) fn build_rpc_frame(
     }
 
     buf
+}
+
+/// Build the `(cmd_id, sub_cmd_id) = (0x08, 0x18)` handshake request
+/// that asks the camera for its 24-byte device hash. The MAC tail of
+/// that hash is what other RPC commands need to embed; this request
+/// itself takes no MAC, so it's the one bootstrap frame we can build
+/// on a freshly-opened camera with no prior state.
+pub(crate) fn build_mac_query_request() -> [u8; RPC_FRAME_LEN] {
+    build_rpc_frame(0x01, 0x00, 0x0D, 0x08, 0x18, &[], 16, &[])
+}
+
+/// `(cmd_id, sub_cmd_id)` of the device-hash reply. The reply payload
+/// is 24 bytes; bytes 18-23 of the payload are the MAC tail.
+const RPC_GET_DEVICE_HASH: (u8, u8) = (0x08, 0x18);
+
+/// Pull the MAC tail out of an `XU_SEL_RPC` GET reply. Returns `None`
+/// unless the reply matches `RPC_GET_DEVICE_HASH` and is long enough.
+pub(crate) fn decode_mac_query_reply(buf: &[u8]) -> Option<[u8; 6]> {
+    let (cmd_id, sub_cmd_id, payload) = parse_rpc_reply(buf)?;
+    if (cmd_id, sub_cmd_id) != RPC_GET_DEVICE_HASH || payload.len() < 24 {
+        return None;
+    }
+    payload[18..24].try_into().ok()
 }
 
 /// Pull (`cmd_id`, `sub_cmd_id`, payload) out of an `XU_SEL_RPC` GET

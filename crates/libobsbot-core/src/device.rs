@@ -51,6 +51,7 @@ impl Device {
         info: DeviceInfo,
         transport: Arc<dyn Transport>,
         events_tx: Option<EventSender>,
+        mac: [u8; 6],
     ) -> Self {
         let cadence_ms = Arc::new(AtomicU32::new(Cadence::Slow.period_ms()));
         let poller_stop = Arc::new(AtomicBool::new(false));
@@ -67,7 +68,7 @@ impl Device {
             info,
             transport,
             firmware: meet2::MIN_FW.to_owned(),
-            mac: meet2::CAPTURED_MAC,
+            mac,
             cadence_ms,
             poller_stop,
             poller,
@@ -649,6 +650,34 @@ fn read_pu_u16(transport: &dyn Transport, selector: u8) -> Result<u16> {
     Ok(u16::from_le_bytes(buf))
 }
 
+/// Issue the XU RPC handshake that asks the camera for its 24-byte
+/// device hash, parse the trailing 6 bytes (the MAC tail), and return
+/// it. Called by [`crate::Devices::open`] before constructing the
+/// `Device` so subsequent RPC sends can embed the correct MAC.
+pub(crate) fn learn_mac(transport: &dyn Transport) -> Result<[u8; 6]> {
+    let request = meet2::build_mac_query_request();
+    transport.uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_RPC, &request)?;
+    let mut reply = [0u8; meet2::RPC_FRAME_LEN];
+    for attempt in 0..meet2::RPC_REPLY_POLL_ATTEMPTS {
+        if attempt > 0 {
+            std::thread::sleep(Duration::from_millis(meet2::RPC_REPLY_POLL_DELAY_MS));
+        }
+        let _ = transport.uvc_get(
+            UvcGet::Cur,
+            meet2::XU_ENTITY_ID,
+            meet2::XU_SEL_RPC,
+            &mut reply,
+        )?;
+        if let Some(mac) = meet2::decode_mac_query_reply(&reply) {
+            return Ok(mac);
+        }
+    }
+    Err(Error::BadResponse {
+        selector: meet2::XU_SEL_RPC,
+        bytes: reply.to_vec(),
+    })
+}
+
 // ---- payload helpers (XU encodings still placeholders) ---------------------
 
 fn encode_wdr(mode: WdrMode) -> u8 {
@@ -964,7 +993,7 @@ mod tests {
         let mock = Arc::new(MockTransport::default());
         let transport: Arc<dyn Transport> = Arc::new(Forward(mock));
         let (tx, rx) = crossbeam_channel::unbounded::<Event>();
-        let device = Device::new(meet2_mock_info(), transport, Some(tx));
+        let device = Device::new(meet2_mock_info(), transport, Some(tx), meet2::CAPTURED_MAC);
         device.set_status_cadence(Cadence::Fast);
 
         // The poller emits its first sample immediately on entry to the

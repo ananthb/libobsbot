@@ -88,19 +88,19 @@ fn main() {
         Err(e) => println!("{e}"),
     }
 
-    print!("set face-focus off (XU RPC, canned frame)... ");
+    print!("set face-focus off (XU RPC, synthesised frame)... ");
     match device.set_face_focus(false) {
         Ok(()) => println!("ok"),
         Err(e) => println!("{e}"),
     }
 
-    print!("firmware from camera (XU RPC, canned frame)... ");
+    print!("firmware from camera (XU RPC, synthesised frame)... ");
     match device.firmware_from_camera() {
         Ok(s) => println!("{s}"),
         Err(e) => println!("{e}"),
     }
 
-    print!("serial from camera (XU RPC, canned frame)... ");
+    print!("serial from camera (XU RPC, synthesised frame)... ");
     match device.serial_from_camera() {
         Ok(s) => println!("{s}"),
         Err(e) => println!("{e}"),

@@ -69,11 +69,22 @@ impl Devices {
     pub fn open(&self, info: &DeviceInfo) -> Result<Device> {
         #[cfg(target_os = "linux")]
         {
-            let transport = crate::transport::usb::UsbTransport::open(info)?;
+            let transport: Arc<dyn crate::transport::Transport> =
+                Arc::new(crate::transport::usb::UsbTransport::open(info)?);
+            // Bootstrap: learn the device's MAC tail before constructing
+            // the Device. The MAC-query handshake doesn't itself need a
+            // MAC, so it's safe to issue on a freshly opened camera.
+            let mac = crate::device::learn_mac(transport.as_ref())?;
+            tracing::debug!(
+                mac = ?format!("{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]),
+                "learned device MAC"
+            );
             Ok(Device::new(
                 info.clone(),
-                Arc::new(transport),
+                transport,
                 Some(self.events_tx.clone()),
+                mac,
             ))
         }
         #[cfg(not(target_os = "linux"))]
