@@ -19,6 +19,7 @@ thiserror = "2"
 tracing = "0.1"
 crossbeam-channel = "0.5"
 arrayvec = "0.7"
+libc = "0.2"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

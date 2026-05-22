@@ -10,6 +10,8 @@
 //! they target — Camera Terminal, Processing Unit, or vendor Extension Unit.
 
 pub mod usb;
+#[cfg(target_os = "linux")]
+pub(crate) mod uvcvideo;
 
 use crate::uvc::UvcGet;
 use crate::Result;

@@ -19,5 +19,11 @@ tracing.workspace = true
 crossbeam-channel.workspace = true
 arrayvec.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
 [lints]
 workspace = true

@@ -10,6 +10,12 @@
 use libobsbot_core::{Devices, Error};
 
 fn main() {
+    if std::env::var_os("RUST_LOG").is_some() {
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_writer(std::io::stderr)
+            .init();
+    }
     let Ok(devices) = Devices::new() else {
         eprintln!("failed to start hot-plug watcher");
         std::process::exit(1);
