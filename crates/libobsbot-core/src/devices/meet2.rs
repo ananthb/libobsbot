@@ -20,6 +20,50 @@ pub(crate) const PRODUCT_ID_MEET2: u16 = 0xfefb;
 /// device by `(vendor_id, product_id)` and address the XU by entity id.
 pub(crate) const XU_ENTITY_ID: u8 = 2;
 
+/// XU "mode register" selector: 60-byte SET with the layout
+/// `[control_id, 0x01, value, 0x00 × 57]`. Each known control id maps
+/// to one OBSBOT proprietary on/off-or-enum control.
+///
+/// Refs: `doc/protocol/meet2/setWdr.pcapng`,
+///       `doc/protocol/meet2/setWdr.md`.
+pub(crate) const XU_SEL_MODE_REGISTER: u8 = 0x06;
+
+/// `XU_SEL_MODE_REGISTER` control id for WDR / HDR. Value byte: `1` =
+/// `DOL2-to-1` HDR on, `0` = HDR off. `setWdr.pcapng` frames 70 + 82.
+pub(crate) const MODE_WDR: u8 = 0x01;
+
+/// Payload length for every `XU_SEL_MODE_REGISTER` SET observed so far.
+pub(crate) const MODE_REGISTER_PAYLOAD_LEN: usize = 60;
+
+/// Build a payload for `XU_SEL_MODE_REGISTER` from
+/// `(control_id, value)`. Layout: `[control_id, 0x01, value, 0x00 × 57]`.
+pub(crate) fn mode_register_payload(control_id: u8, value: u8) -> [u8; MODE_REGISTER_PAYLOAD_LEN] {
+    let mut buf = [0u8; MODE_REGISTER_PAYLOAD_LEN];
+    buf[0] = control_id;
+    buf[1] = 0x01;
+    buf[2] = value;
+    buf
+}
+
 /// Minimum firmware version this build supports.
 /// Updated once the first hardware verification run lands.
 pub(crate) const MIN_FW: &str = "0.0.0";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mode_register_payload_layout_matches_wire() {
+        // setWdr.pcapng frame 70 (HDR on): 01 01 01 00 …
+        let on = mode_register_payload(MODE_WDR, 1);
+        assert_eq!(on[..3], [0x01, 0x01, 0x01]);
+        assert!(on[3..].iter().all(|&b| b == 0));
+        assert_eq!(on.len(), 60);
+
+        // setWdr.pcapng frame 82 (HDR off): 01 01 00 00 …
+        let off = mode_register_payload(MODE_WDR, 0);
+        assert_eq!(off[..3], [0x01, 0x01, 0x00]);
+        assert!(off[3..].iter().all(|&b| b == 0));
+    }
+}

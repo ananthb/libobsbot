@@ -292,18 +292,24 @@ impl Device {
     // Every method below routes through the XU. Selector and payload layout
     // are pending per-method captures under doc/protocol/meet2/.
 
-    /// Set HDR mode.
+    /// Set HDR mode. XU mode-register selector `0x06`, control id
+    /// [`meet2::MODE_WDR`]. See `doc/protocol/meet2/setWdr.md`.
     pub fn set_wdr(&self, mode: WdrMode) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_WDR, encode_wdr(mode));
         self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_wdr(mode)])
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
-    /// Read current HDR mode.
+    /// Read current HDR mode. GET reply format pending capture; the body
+    /// reads one byte from the mode-register selector for now.
     pub fn wdr(&self) -> Result<WdrMode> {
         let mut buf = [0u8; 1];
-        let _ = self
-            .transport
-            .uvc_get(UvcGet::Cur, meet2::XU_ENTITY_ID, 0, &mut buf)?;
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            meet2::XU_ENTITY_ID,
+            meet2::XU_SEL_MODE_REGISTER,
+            &mut buf,
+        )?;
         decode_wdr(buf[0])
     }
 
@@ -588,12 +594,21 @@ mod tests {
     }
 
     #[test]
-    fn wdr_routes_to_xu() {
+    fn wdr_routes_to_xu_mode_register_with_wire_bytes() {
         let (d, mock) = device_with_mock();
         d.set_wdr(WdrMode::Dol2To1).unwrap();
-        let (entity, _sel, payload) = last_set(&mock);
+        let (entity, sel, payload) = last_set(&mock);
         assert_eq!(entity, meet2::XU_ENTITY_ID);
-        assert_eq!(payload, vec![1]);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        // setWdr.pcapng frame 70: control_id=0x01 (WDR), flag=0x01, value=0x01 (on).
+        assert_eq!(payload.len(), meet2::MODE_REGISTER_PAYLOAD_LEN);
+        assert_eq!(payload[..3], [0x01, 0x01, 0x01]);
+        assert!(payload[3..].iter().all(|&b| b == 0));
+
+        d.set_wdr(WdrMode::Off).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        // setWdr.pcapng frame 82: control_id=0x01, flag=0x01, value=0x00 (off).
+        assert_eq!(payload[..3], [0x01, 0x01, 0x00]);
     }
 
     #[test]
