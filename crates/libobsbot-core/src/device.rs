@@ -12,8 +12,7 @@ use crate::devices::meet2;
 use crate::discovery::DeviceInfo;
 use crate::transport::Transport;
 use crate::types::{
-    AiMode, AutoFramingMode, FovType, MediaMode, ProductType, Status, TrackSpeed, WdrMode,
-    WhiteBalanceMode,
+    AiMode, AutoFramingMode, FovType, MediaMode, ProductType, Status, WdrMode, WhiteBalanceMode,
 };
 use crate::uvc::{self, UvcGet};
 use crate::{Error, Result};
@@ -65,14 +64,24 @@ impl Device {
         self.info.product_type
     }
 
-    /// Read a fresh status snapshot synchronously. Routes through the OBSBOT
-    /// XU since this is a proprietary aggregate; selector pending capture.
+    /// Read a fresh status snapshot synchronously.
+    ///
+    /// The current-state fields (HDR / face-AE / AI mode / focus
+    /// bits) come from a selector-0x02 RPC reply whose request frame
+    /// hasn't been captured yet, so they remain `Default::default()`
+    /// for now. Firmware / serial fields come from
+    /// [`firmware_from_camera`](Self::firmware_from_camera) /
+    /// [`serial_from_camera`](Self::serial_from_camera) and are
+    /// filled in best-effort - they're left blank on read failure
+    /// rather than failing the whole status call.
     pub fn status(&self) -> Result<Status> {
-        let mut buf = [0u8; 64];
-        let _ = self
-            .transport
-            .uvc_get(UvcGet::Cur, meet2::XU_ENTITY_ID, 0, &mut buf)?;
-        unreachable!("uvc_get returns Unsupported until the transport lands");
+        let firmware = self.firmware_from_camera().unwrap_or_default();
+        let serial = self.serial_from_camera().unwrap_or_default();
+        Ok(Status {
+            firmware,
+            serial,
+            ..Status::default()
+        })
     }
 
     /// Ask the camera for its firmware version via the XU RPC channel.
@@ -170,17 +179,6 @@ impl Device {
         )
     }
 
-    /// Set zoom with a ramp speed.
-    ///
-    /// Standard UVC has no relative-zoom-with-speed selector that matches
-    /// this signature; route through the OBSBOT XU. Selector pending capture.
-    pub fn set_zoom_with_speed(&self, zoom: f32, speed: f32) -> Result<()> {
-        let mut payload = [0u8; 8];
-        payload[..4].copy_from_slice(&zoom.to_le_bytes());
-        payload[4..].copy_from_slice(&speed.to_le_bytes());
-        self.transport.uvc_set(meet2::XU_ENTITY_ID, 0, &payload)
-    }
-
     /// Set focus distance.
     ///
     /// Encodes as `CT_FOCUS_ABSOLUTE_CONTROL`: u16 LE (UVC 1.5 §4.2.2.1.6).
@@ -269,11 +267,9 @@ impl Device {
     // ---- White balance: hybrid (PU temperature, XU presets) -----------------
 
     /// Set white balance mode; the `kelvin` value is meaningful only when
-    /// `mode` is [`WhiteBalanceMode::Manual`].
-    ///
-    /// Auto/Manual toggle goes through standard UVC; presets (Daylight,
-    /// Fluorescent, Tungsten) live on the OBSBOT XU and route there for now
-    /// with a placeholder selector until capture lands.
+    /// `mode` is [`WhiteBalanceMode::Manual`]. The Meet 2 only supports
+    /// Auto and Manual (per the SDK header) so this routes entirely
+    /// through standard UVC Processing Unit selectors `0x0a` / `0x0b`.
     pub fn set_white_balance(&self, mode: WhiteBalanceMode, kelvin: Option<u16>) -> Result<()> {
         match mode {
             WhiteBalanceMode::Auto => self.transport.uvc_set(
@@ -294,11 +290,6 @@ impl Device {
                     &k.to_le_bytes(),
                 )
             }
-            preset => {
-                let mut payload = [0u8; 4];
-                payload[0] = encode_wb_preset(preset);
-                self.transport.uvc_set(meet2::XU_ENTITY_ID, 0, &payload)
-            }
         }
     }
 
@@ -318,21 +309,6 @@ impl Device {
             WhiteBalanceMode::Auto
         };
         Ok((mode, kelvin))
-    }
-
-    /// Presets reported by the camera as available.
-    ///
-    /// Presets are an OBSBOT extension; selector pending capture.
-    pub fn white_balance_presets(&self) -> Result<Vec<WhiteBalanceMode>> {
-        let mut buf = [0u8; 16];
-        let n = self
-            .transport
-            .uvc_get(UvcGet::Cur, meet2::XU_ENTITY_ID, 0, &mut buf)?;
-        Ok(buf[..n]
-            .iter()
-            .copied()
-            .filter_map(|b| decode_wb_preset(b).ok())
-            .collect())
     }
 
     /// Reported manual Kelvin range.
@@ -388,13 +364,21 @@ impl Device {
 
     /// Toggle face-based auto-focus.
     ///
-    /// Unlike the other face/AI toggles, face-focus rides the RPC
-    /// channel on XU selector `0x02`, not the mode-register on `0x06`.
-    /// Selector + payload format pending capture decode; see
-    /// `doc/protocol/meet2/setFaceFocus.md` for what's known.
+    /// Face-focus rides the XU selector-0x02 RPC channel
+    /// (`cmd_set` 0x02, `cmd_id` 0x36) - not the simpler mode-register on
+    /// 0x06. Two canned request frames are sent verbatim, one per
+    /// state; see [`firmware_from_camera`](Self::firmware_from_camera)
+    /// for the per-device caveat (the frames embed the captured Meet 2's
+    /// MAC and CRC at offsets 6-7 / 14-15, both blocked on the CRC
+    /// decode in `doc/protocol/meet2/crc-investigation.md`).
     pub fn set_face_focus(&self, on: bool) -> Result<()> {
+        let request = if on {
+            &meet2::RPC_REQUEST_FACE_FOCUS_ON
+        } else {
+            &meet2::RPC_REQUEST_FACE_FOCUS_OFF
+        };
         self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_RPC, request)
     }
 
     /// Select media mode. XU mode-register control id `0x00` - see
@@ -425,24 +409,6 @@ impl Device {
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
-    /// Enable AI auto-zoom while tracking.
-    pub fn set_ai_auto_zoom(&self, on: bool) -> Result<()> {
-        self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
-    }
-
-    /// Set AI tracking speed.
-    pub fn set_track_speed(&self, speed: TrackSpeed) -> Result<()> {
-        self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_track_speed(speed)])
-    }
-
-    /// Toggle audio auto-gain control.
-    pub fn set_audio_auto_gain(&self, on: bool) -> Result<()> {
-        self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
-    }
-
     // ---- private helpers ----------------------------------------------------
 
     fn pu_get_i16(&self, req: UvcGet, selector: u8) -> Result<i16> {
@@ -468,30 +434,6 @@ impl Device {
 const PAN_TILT_PROVISIONAL_SCALE: f32 = 540_000.0;
 
 // ---- payload helpers (XU encodings still placeholders) ---------------------
-
-fn encode_wb_preset(mode: WhiteBalanceMode) -> u8 {
-    match mode {
-        WhiteBalanceMode::Auto => 0,
-        WhiteBalanceMode::Manual => 1,
-        WhiteBalanceMode::Daylight => 2,
-        WhiteBalanceMode::Fluorescent => 3,
-        WhiteBalanceMode::Tungsten => 4,
-    }
-}
-
-fn decode_wb_preset(b: u8) -> Result<WhiteBalanceMode> {
-    match b {
-        0 => Ok(WhiteBalanceMode::Auto),
-        1 => Ok(WhiteBalanceMode::Manual),
-        2 => Ok(WhiteBalanceMode::Daylight),
-        3 => Ok(WhiteBalanceMode::Fluorescent),
-        4 => Ok(WhiteBalanceMode::Tungsten),
-        _ => Err(Error::BadResponse {
-            selector: 0,
-            bytes: vec![b],
-        }),
-    }
-}
 
 fn encode_wdr(mode: WdrMode) -> u8 {
     match mode {
@@ -548,14 +490,6 @@ fn encode_ai_mode(mode: AiMode) -> u16 {
         AiMode::Hand => 3,
         AiMode::WhiteBoard => 4,
         AiMode::Desk => 5,
-    }
-}
-
-fn encode_track_speed(speed: TrackSpeed) -> u8 {
-    match speed {
-        TrackSpeed::Slow => 0,
-        TrackSpeed::Normal => 1,
-        TrackSpeed::Fast => 2,
     }
 }
 
@@ -676,15 +610,6 @@ mod tests {
     }
 
     #[test]
-    fn wb_preset_routes_to_xu() {
-        let (d, mock) = device_with_mock();
-        d.set_white_balance(WhiteBalanceMode::Daylight, None)
-            .unwrap();
-        let (entity, _sel, _payload) = last_set(&mock);
-        assert_eq!(entity, meet2::XU_ENTITY_ID);
-    }
-
-    #[test]
     fn wdr_routes_to_xu_mode_register_with_wire_bytes() {
         let (d, mock) = device_with_mock();
         d.set_wdr(WdrMode::Dol2To1).unwrap();
@@ -781,20 +706,6 @@ mod tests {
     }
 
     #[test]
-    fn wb_preset_encode_decode_round_trip() {
-        for mode in [
-            WhiteBalanceMode::Auto,
-            WhiteBalanceMode::Manual,
-            WhiteBalanceMode::Daylight,
-            WhiteBalanceMode::Fluorescent,
-            WhiteBalanceMode::Tungsten,
-        ] {
-            let b = encode_wb_preset(mode);
-            assert_eq!(decode_wb_preset(b).unwrap(), mode);
-        }
-    }
-
-    #[test]
     fn wdr_encode_decode_round_trip() {
         for mode in [WdrMode::Off, WdrMode::Dol2To1] {
             assert_eq!(decode_wdr(encode_wdr(mode)).unwrap(), mode);
@@ -803,10 +714,6 @@ mod tests {
 
     #[test]
     fn decode_rejects_unknown_byte() {
-        assert!(matches!(
-            decode_wb_preset(99),
-            Err(Error::BadResponse { selector: 0, .. })
-        ));
         assert!(matches!(decode_wdr(99), Err(Error::BadResponse { .. })));
     }
 }

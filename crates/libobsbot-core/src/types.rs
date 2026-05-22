@@ -29,19 +29,17 @@ pub enum WdrMode {
     Dol2To1,
 }
 
-/// White-balance preset.
+/// White-balance preset. The SDK's `cameraSetWhiteBalanceR`
+/// enumerates many presets, but only `Auto` and `Manual` are
+/// supported on the Meet 2 (per the SDK header). The other
+/// presets (Daylight, Fluorescent, etc.) are Tiny / Tail-Air
+/// only and intentionally absent here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WhiteBalanceMode {
     /// Automatic white balance.
     Auto,
     /// Manual Kelvin temperature; the value lives in [`crate::Device::white_balance`].
     Manual,
-    /// Daylight preset.
-    Daylight,
-    /// Fluorescent preset.
-    Fluorescent,
-    /// Tungsten preset.
-    Tungsten,
 }
 
 /// Auto-framing sub-mode for the Meet 2.
@@ -87,20 +85,14 @@ pub enum MediaMode {
     AutoFrame,
 }
 
-/// AI tracking speed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrackSpeed {
-    /// Slow / smooth tracking.
-    Slow,
-    /// Normal tracking speed.
-    Normal,
-    /// Fast / snappy tracking.
-    Fast,
-}
-
 /// Snapshot of camera state pushed periodically by the status poller.
 #[derive(Debug, Clone, Default)]
 pub struct Status {
+    /// Camera-reported firmware version, e.g. `"4.4.6.1"`. Empty when
+    /// the firmware read failed.
+    pub firmware: String,
+    /// Camera-reported serial number. Empty when the serial read failed.
+    pub serial: String,
     /// Brightness setting reported by the camera.
     pub brightness: i32,
     /// Contrast setting reported by the camera.

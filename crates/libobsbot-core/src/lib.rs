@@ -22,6 +22,5 @@ pub use discovery::{DeviceInfo, Devices};
 pub use error::{Error, Result};
 pub use status::{Event, EventReceiver};
 pub use types::{
-    AiMode, AutoFramingMode, FovType, MediaMode, ProductType, Status, TrackSpeed, WdrMode,
-    WhiteBalanceMode,
+    AiMode, AutoFramingMode, FovType, MediaMode, ProductType, Status, WdrMode, WhiteBalanceMode,
 };

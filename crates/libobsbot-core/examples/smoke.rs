@@ -71,6 +71,12 @@ fn main() {
         Err(e) => println!("{e}"),
     }
 
+    print!("set face-focus off (XU RPC, canned frame)... ");
+    match device.set_face_focus(false) {
+        Ok(()) => println!("ok"),
+        Err(e) => println!("{e}"),
+    }
+
     print!("firmware from camera (XU RPC, canned frame)... ");
     match device.firmware_from_camera() {
         Ok(s) => println!("{s}"),
