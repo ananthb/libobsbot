@@ -28,9 +28,23 @@ pub(crate) const XU_ENTITY_ID: u8 = 2;
 ///       `doc/protocol/meet2/setWdr.md`.
 pub(crate) const XU_SEL_MODE_REGISTER: u8 = 0x06;
 
+/// `XU_SEL_MODE_REGISTER` control id for media mode. Value byte matches
+/// the SDK's `Device::MediaMode` enum (0=Normal, 1=Background, 2=AutoFrame).
+/// `setMediaMode.pcapng` frame 58 (value=2).
+pub(crate) const MODE_MEDIA_MODE: u8 = 0x00;
+
 /// `XU_SEL_MODE_REGISTER` control id for WDR / HDR. Value byte: `1` =
 /// `DOL2-to-1` HDR on, `0` = HDR off. `setWdr.pcapng` frames 70 + 82.
 pub(crate) const MODE_WDR: u8 = 0x01;
+
+/// `XU_SEL_MODE_REGISTER` control id for face-based auto-exposure.
+/// Value byte: `0` = off, `1` = on. `setFaceAE.pcapng` frame 52.
+pub(crate) const MODE_FACE_AE: u8 = 0x03;
+
+/// `XU_SEL_MODE_REGISTER` control id for FOV preset. Value byte matches
+/// the SDK's `Device::FovType` enum (0=86°/Wide, 1=78°/Medium,
+/// 2=65°/Narrow). `setFov.pcapng` frame 52 (value=1).
+pub(crate) const MODE_FOV: u8 = 0x04;
 
 /// Payload length for every `XU_SEL_MODE_REGISTER` SET observed so far.
 pub(crate) const MODE_REGISTER_PAYLOAD_LEN: usize = 60;

@@ -292,8 +292,9 @@ impl Device {
     // Every method below routes through the XU. Selector and payload layout
     // are pending per-method captures under doc/protocol/meet2/.
 
-    /// Set HDR mode. XU mode-register selector `0x06`, control id
-    /// [`meet2::MODE_WDR`]. See `doc/protocol/meet2/setWdr.md`.
+    /// Set HDR mode. Writes to the OBSBOT XU mode-register selector
+    /// `0x06` with the WDR control id; see `doc/protocol/meet2/setWdr.md`
+    /// for the wire format.
     pub fn set_wdr(&self, mode: WdrMode) -> Result<()> {
         let payload = meet2::mode_register_payload(meet2::MODE_WDR, encode_wdr(mode));
         self.transport
@@ -313,28 +314,40 @@ impl Device {
         decode_wdr(buf[0])
     }
 
-    /// Set field-of-view preset.
+    /// Set field-of-view preset. XU mode-register control id
+    /// [`meet2::MODE_FOV`](crate::devices) — see
+    /// `doc/protocol/meet2/setFov.md`.
     pub fn set_fov(&self, fov: FovType) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_FOV, encode_fov(fov));
         self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_fov(fov)])
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
-    /// Toggle face-based auto-exposure.
+    /// Toggle face-based auto-exposure. XU mode-register control id
+    /// `0x03` — see `doc/protocol/meet2/setFaceAE.md`.
     pub fn set_face_ae(&self, on: bool) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_FACE_AE, u8::from(on));
         self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
     /// Toggle face-based auto-focus.
+    ///
+    /// Unlike the other face/AI toggles, face-focus rides the RPC
+    /// channel on XU selector `0x02`, not the mode-register on `0x06`.
+    /// Selector + payload format pending capture decode; see
+    /// `doc/protocol/meet2/setFaceFocus.md` for what's known.
     pub fn set_face_focus(&self, on: bool) -> Result<()> {
         self.transport
             .uvc_set(meet2::XU_ENTITY_ID, 0, &[u8::from(on)])
     }
 
-    /// Select media mode.
+    /// Select media mode. XU mode-register control id `0x00` — see
+    /// `doc/protocol/meet2/setMediaMode.md`.
     pub fn set_media_mode(&self, mode: MediaMode) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_MEDIA_MODE, encode_media_mode(mode));
         self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, 0, &[encode_media_mode(mode)])
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
     /// Configure auto-framing.
@@ -445,10 +458,11 @@ fn encode_fov(fov: FovType) -> u8 {
 }
 
 fn encode_media_mode(mode: MediaMode) -> u8 {
+    // Matches the SDK enum and `setMediaMode.pcapng` frame 58.
     match mode {
         MediaMode::Normal => 0,
-        MediaMode::AutoFraming => 1,
-        MediaMode::Streaming => 2,
+        MediaMode::Background => 1,
+        MediaMode::AutoFrame => 2,
     }
 }
 
@@ -612,11 +626,42 @@ mod tests {
     }
 
     #[test]
-    fn fov_routes_to_xu() {
+    fn fov_routes_to_xu_mode_register_with_wire_bytes() {
+        // setFov.pcapng frame 52 (FovType78 = Medium): 04 01 01 00 …
         let (d, mock) = device_with_mock();
-        d.set_fov(FovType::Wide).unwrap();
-        let (entity, _, _) = last_set(&mock);
+        d.set_fov(FovType::Medium).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
         assert_eq!(entity, meet2::XU_ENTITY_ID);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        assert_eq!(payload.len(), meet2::MODE_REGISTER_PAYLOAD_LEN);
+        assert_eq!(payload[..3], [0x04, 0x01, 0x01]);
+        assert!(payload[3..].iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn media_mode_routes_to_xu_mode_register_with_wire_bytes() {
+        // setMediaMode.pcapng frame 58 (MediaModeAutoFrame = 2): 00 01 02 …
+        let (d, mock) = device_with_mock();
+        d.set_media_mode(MediaMode::AutoFrame).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        assert_eq!(payload[..3], [0x00, 0x01, 0x02]);
+    }
+
+    #[test]
+    fn face_ae_routes_to_xu_mode_register_with_wire_bytes() {
+        // setFaceAE.pcapng frame 52 (on): 03 01 01 …
+        let (d, mock) = device_with_mock();
+        d.set_face_ae(true).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        assert_eq!(payload[..3], [0x03, 0x01, 0x01]);
+
+        d.set_face_ae(false).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..3], [0x03, 0x01, 0x00]);
     }
 
     #[test]

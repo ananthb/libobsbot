@@ -64,15 +64,16 @@ pub enum AiMode {
     On,
 }
 
-/// Media mode (normal capture vs streaming).
+/// Media mode. Matches `Device::MediaMode` in the OBSBOT public SDK
+/// (`MediaModeNormal = 0`, `MediaModeBackground = 1`, `MediaModeAutoFrame = 2`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaMode {
     /// Normal UVC.
     Normal,
-    /// Auto-framing on the camera-side.
-    AutoFraming,
-    /// Streaming mode.
-    Streaming,
+    /// Virtual-background mode.
+    Background,
+    /// Camera-side auto-framing.
+    AutoFrame,
 }
 
 /// AI tracking speed.
