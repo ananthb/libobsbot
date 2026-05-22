@@ -130,8 +130,8 @@ See <a href="protocol.html">protocol notes</a>.</p>
     <tr>
       <td>status (firmware / serial / current state)</td>
       <td>XU selector <code>0x02</code> RPC frame</td>
-      <td class="pending">handshake captured, framing not decoded</td>
-      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/initial_apply.md">initial_apply.md</a></td>
+      <td class="pending">read path decoded (serial + firmware bytes located); write path blocked on the 16-bit CRC at offset 6-7</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/getStatus.md">getStatus.md</a></td>
     </tr>
   </tbody>
 </table>
