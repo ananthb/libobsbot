@@ -1,5 +1,5 @@
 {
-  description = "libobsbot - clean-room, cross-platform Rust SDK for OBSBOT cameras";
+  description = "libobsbot - cross-platform Rust SDK for OBSBOT cameras";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -57,7 +57,7 @@
           doCheck = true;
 
           meta = with pkgs.lib; {
-            description = "Clean-room, cross-platform Rust SDK for OBSBOT cameras";
+            description = "Cross-platform Rust SDK for OBSBOT cameras";
             homepage = "https://github.com/ananthb/libobsbot";
             license = licenses.gpl3Only;
             platforms = platforms.unix;

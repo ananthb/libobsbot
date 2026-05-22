@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Clean-room Rust implementation of the OBSBOT camera SDK.
+//! Rust implementation of the OBSBOT camera SDK.
 //!
 //! See `README.md` and `CONTRIBUTING.md` at the repository root. v0.0.0 is a
 //! skeleton — the public API is unstable and most methods return

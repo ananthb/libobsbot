@@ -2,7 +2,7 @@
 //! OBSBOT Meet 2 command table.
 //!
 //! Every constant in this module MUST be justified by a committed pcap under
-//! `docs/protocol/meet2/`. See `CONTRIBUTING.md` for the clean-room rule.
+//! `docs/protocol/meet2/`. See `CONTRIBUTING.md` for the sourcing rule.
 //!
 //! v0.0.0 contains placeholders only — no real selectors. The capture phase
 //! starts at M3.

@@ -9,7 +9,7 @@ rust-version = "1.75"
 license = "GPL-3.0-only"
 repository = "https://github.com/ananthb/libobsbot"
 authors = ["Ananth Bhaskararaman <antsub@gmail.com>"]
-description = "Clean-room, cross-platform Rust SDK for OBSBOT cameras"
+description = "Cross-platform Rust SDK for OBSBOT cameras"
 
 [workspace.dependencies]
 libobsbot-core = { version = "0.0.0", path = "crates/libobsbot-core" }

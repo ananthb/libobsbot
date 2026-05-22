@@ -1,14 +1,14 @@
 # Contributing to libobsbot
 
-Welcome. Before you open a PR, read this — the clean-room rule is the most
+Welcome. Before you open a PR, read this — the sourcing rule is the most
 important policy in the project.
 
-## The clean-room rule
+## The sourcing rule
 
 OBSBOT's Terms of Use prohibit reverse engineering of their software. To keep
-libobsbot legally defensible, this project is **strict clean-room from observed
-USB wire bytes**. The following inputs are off-limits when working on this
-codebase:
+libobsbot legally defensible, contributions must be derived only from observed
+USB wire behavior and public sources. The following inputs are off-limits when
+working on this codebase:
 
 - The contents of OBSBOT's `libdev.so`/`libdev.dylib`/`libdev.dll` — do not
   disassemble, decompile, dump strings, run `nm`/`readelf -a`/`objdump` for
@@ -28,7 +28,7 @@ The following inputs **are** permitted:
 - USB packet captures of the existing closed-source `libdev.so` talking to a
   real OBSBOT camera, captured with Wireshark + `usbmon` (or equivalent on
   other OSes). The capture is observed wire behavior, not source.
-- Prior public reverse-engineering work in other open-source projects (e.g.
+- Prior public work in other open-source projects (e.g.
   [samliddicott/meet4k](https://github.com/samliddicott/meet4k),
   [taxfromdk/obsbot_tiny_reversing](https://github.com/taxfromdk/obsbot_tiny_reversing)).
 - OBSBOT's published documentation: OSC docs, manuals, public datasheets.

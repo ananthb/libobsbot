@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Clean-room Rust implementation of the OBSBOT camera SDK (C ABI)"
+description = "Rust implementation of the OBSBOT camera SDK (C ABI)"
 
 [lib]
 name = "libobsbot"

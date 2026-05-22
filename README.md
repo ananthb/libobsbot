@@ -1,6 +1,6 @@
 # libobsbot
 
-A clean-room, cross-platform Rust SDK for [OBSBOT](https://www.obsbot.com)
+A cross-platform Rust SDK for [OBSBOT](https://www.obsbot.com)
 cameras. Implements the OBSBOT camera-control wire protocol from observed USB
 traffic and ships a stable C ABI so the same library can drive PTZ, image
 controls, white balance, HDR, FOV, face AE/focus, AI auto-framing, and audio
@@ -31,16 +31,15 @@ scope for v1.
 | macOS | Supported with one constraint: no other application may have the camera open at the same time. AVFoundation/CoreMediaIO holds an exclusive claim and IOKit will refuse arbitrary control transfers. |
 | Windows | The camera must be bound to WinUSB via [Zadig](https://zadig.akeo.ie). Binding WinUSB removes the camera from `usbvideo.sys`, so it becomes unusable in Zoom/OBS until the driver is restored. See `tools/winusb-install.md`. |
 
-## Provenance and legal posture
+## Provenance
 
-This is a **strict clean-room** implementation. OBSBOT's Terms of Use prohibit
-reverse engineering of their software. The permitted inputs to this codebase
-are:
+The implementation is derived from observed USB wire behavior of a real
+OBSBOT Meet 2, plus public sources. Permitted inputs to this codebase are:
 
 - The public C++ header file `dev.hpp` (API shape only, no implementation)
 - USB packet captures of the existing Linux `libdev.so` talking to a real
   OBSBOT Meet 2 (Wireshark with `usbmon`)
-- Prior public reverse-engineering work
+- Prior public work
   ([samliddicott/meet4k](https://github.com/samliddicott/meet4k),
   [taxfromdk/obsbot_tiny_reversing](https://github.com/taxfromdk/obsbot_tiny_reversing))
 - OBSBOT's official OSC documentation
@@ -49,8 +48,7 @@ are:
 Every selector / payload constant in `crates/libobsbot-core/src/devices/meet2.rs`
 must reference a committed `.pcapng` in `docs/protocol/meet2/`, and the commit
 that adds the constant must cite the capture file in its message. That is the
-audit trail. See `CONTRIBUTING.md` for the contributor rules that protect the
-clean-room boundary.
+audit trail. See `CONTRIBUTING.md` for the contributor sourcing rules.
 
 ## Layout
 

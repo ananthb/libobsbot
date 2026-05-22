@@ -36,4 +36,4 @@ Filled in once the first capture lands.
    for SET\_CUR and `0xA1 && 0x81` for GET\_CUR.
 8. Record findings in `<methodName>.md`.
 
-See `CONTRIBUTING.md` at the repo root for the clean-room rule.
+See `CONTRIBUTING.md` at the repo root for the sourcing rule.
