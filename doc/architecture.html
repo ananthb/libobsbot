@@ -80,10 +80,13 @@ the XU surface requires pcap audit-trail entries.</p>
   <li>The hot-plug watcher runs on one <code>std::thread</code> spawned
       by <code>Devices::new</code>, pumping events into a
       <code>crossbeam_channel</code>.</li>
-  <li>Each opened <code>Device</code> owns one status-poller thread that
-      issues a <code>uvc_get</code> for the XU status selector on a
-      2.5 s interval (slow mode) or 25 ms interval (fast mode), again
-      pumping into the same channel.</li>
+  <li>Each opened <code>Device</code> owns one status-poller thread
+      that issues <code>uvc_get</code> for brightness, contrast,
+      saturation (Processing Unit) and pan/tilt/zoom (Camera Terminal)
+      every 2.5 s (slow mode) or 25 ms (fast mode), pushing
+      <code>Event::Status</code> snapshots into the same channel.
+      Firmware/serial ride the XU RPC channel and are exposed via
+      dedicated methods rather than the periodic sample.</li>
   <li>All public setter methods are synchronous. Getter methods that
       map to <code>GET_CUR</code> are also synchronous.</li>
 </ul>
@@ -99,8 +102,11 @@ device is enough.</p>
       <code>uvcvideo</code> coexistence path
       (<code>UVCIOC_CTRL_QUERY</code> via <code>/dev/videoN</code>) so
       control transfers can land while Zoom/OBS/Cheese is streaming.</li>
-  <li><code>src/discovery.rs</code> picks up real hot-plug events
-      (`udev` netlink on Linux; analogous APIs on macOS/Windows).</li>
+  <li><code>src/discovery.rs</code> currently polls
+      <code>/sys/class/video4linux</code> every 2 s to detect
+      add/remove. macOS / Windows transports (and possibly a switch
+      to <code>libudev</code> for sub-second latency) are tracked
+      under future work.</li>
 </ul>
 
 <h2>What is intentionally out of scope (v1)</h2>
