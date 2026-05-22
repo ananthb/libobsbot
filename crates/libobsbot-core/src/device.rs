@@ -7,34 +7,70 @@
 //! entity/selector routing are stable.
 
 use core::ops::RangeInclusive;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Arc;
+use std::thread::JoinHandle;
+use std::time::Duration;
 
 use crate::devices::meet2;
 use crate::discovery::DeviceInfo;
+use crate::status::{Event, EventSender};
 use crate::transport::Transport;
 use crate::types::{
-    AiMode, AutoFramingMode, FovType, MediaMode, ProductType, Status, WdrMode, WhiteBalanceMode,
+    AiMode, AutoFramingMode, Cadence, FovType, MediaMode, ProductType, Status, WdrMode,
+    WhiteBalanceMode,
 };
 use crate::uvc::{self, UvcGet};
 use crate::{Error, Result};
 
 /// Opened OBSBOT camera.
 ///
-/// Obtain via [`crate::Devices::open`]. Dropping the handle releases the USB
-/// claim and stops the per-device status poller (no poller yet - lands in
-/// M7).
+/// Obtain via [`crate::Devices::open`]. Dropping the handle stops the
+/// per-device status poller (joining its thread) and releases the
+/// transport's `/dev/videoN` handle.
 pub struct Device {
     info: DeviceInfo,
-    transport: Box<dyn Transport>,
+    transport: Arc<dyn Transport>,
     firmware: String,
+    /// Poller period in milliseconds. Shared with the poller thread so
+    /// [`Device::set_status_cadence`] can swap Slow/Fast on the fly.
+    cadence_ms: Arc<AtomicU32>,
+    /// Set by [`Device::drop`] to stop the poller.
+    poller_stop: Arc<AtomicBool>,
+    poller: Option<JoinHandle<()>>,
 }
 
 impl Device {
-    pub(crate) fn new(info: DeviceInfo, transport: Box<dyn Transport>) -> Self {
+    pub(crate) fn new(
+        info: DeviceInfo,
+        transport: Arc<dyn Transport>,
+        events_tx: Option<EventSender>,
+    ) -> Self {
+        let cadence_ms = Arc::new(AtomicU32::new(Cadence::Slow.period_ms()));
+        let poller_stop = Arc::new(AtomicBool::new(false));
+        let poller = events_tx.map(|tx| {
+            spawn_status_poller(
+                tx,
+                info.serial.clone(),
+                transport.clone(),
+                cadence_ms.clone(),
+                poller_stop.clone(),
+            )
+        });
         Self {
             info,
             transport,
             firmware: meet2::MIN_FW.to_owned(),
+            cadence_ms,
+            poller_stop,
+            poller,
         }
+    }
+
+    /// Change how often the status poller samples the camera.
+    pub fn set_status_cadence(&self, cadence: Cadence) {
+        self.cadence_ms
+            .store(cadence.period_ms(), Ordering::Relaxed);
     }
 
     /// Human-readable model name.
@@ -433,6 +469,101 @@ impl Device {
 // digital pan/tilt envelope. Real scale lands once GET_MIN/GET_MAX wire up.
 const PAN_TILT_PROVISIONAL_SCALE: f32 = 540_000.0;
 
+/// Granularity for the poller's stop check between samples. The poll
+/// thread sleeps in chunks this small so [`Device::drop`] can interrupt
+/// it without waiting a full cadence period.
+const POLLER_TICK: Duration = Duration::from_millis(25);
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        self.poller_stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.poller.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+/// Spawn the per-device status poller thread. Reads brightness,
+/// contrast, and saturation each cadence tick (the controls that have
+/// stable wire formats today) and pushes a [`Event::Status`] into the
+/// shared event channel. Exits when `stop` flips or the channel closes.
+///
+/// Firmware/serial are intentionally *not* sampled here. They ride the
+/// XU RPC channel, take multiple round trips, and rarely change at
+/// runtime; call [`Device::firmware_from_camera`] /
+/// [`Device::serial_from_camera`] explicitly when you need them.
+fn spawn_status_poller(
+    tx: EventSender,
+    serial: String,
+    transport: Arc<dyn Transport>,
+    cadence_ms: Arc<AtomicU32>,
+    stop: Arc<AtomicBool>,
+) -> JoinHandle<()> {
+    std::thread::Builder::new()
+        .name(format!("libobsbot-poll-{serial}"))
+        .spawn(move || poll_loop(&tx, &serial, transport.as_ref(), &cadence_ms, &stop))
+        .expect("spawn status poller thread")
+}
+
+fn poll_loop(
+    tx: &EventSender,
+    serial: &str,
+    transport: &dyn Transport,
+    cadence_ms: &AtomicU32,
+    stop: &AtomicBool,
+) {
+    while !stop.load(Ordering::Relaxed) {
+        let snapshot = sample_status(transport);
+        if tx
+            .send(Event::Status {
+                serial: serial.to_owned(),
+                snapshot,
+            })
+            .is_err()
+        {
+            return;
+        }
+        let target = Duration::from_millis(u64::from(cadence_ms.load(Ordering::Relaxed)));
+        let mut slept = Duration::ZERO;
+        while slept < target {
+            if stop.load(Ordering::Relaxed) {
+                return;
+            }
+            std::thread::sleep(POLLER_TICK);
+            slept += POLLER_TICK;
+        }
+    }
+}
+
+/// One status sample. Reads what we have stable wire formats for; any
+/// individual read that errors leaves the corresponding field at its
+/// default rather than failing the whole sample.
+fn sample_status(transport: &dyn Transport) -> Status {
+    let mut snap = Status::default();
+    if let Ok(v) = read_pu_i16(transport, uvc::pu::BRIGHTNESS) {
+        snap.brightness = i32::from(v);
+    }
+    if let Ok(v) = read_pu_u16(transport, uvc::pu::CONTRAST) {
+        snap.contrast = i32::from(v);
+    }
+    if let Ok(v) = read_pu_u16(transport, uvc::pu::SATURATION) {
+        snap.saturation = i32::from(v);
+    }
+    snap
+}
+
+fn read_pu_i16(transport: &dyn Transport, selector: u8) -> Result<i16> {
+    let mut buf = [0u8; 2];
+    let _ = transport.uvc_get(UvcGet::Cur, uvc::PROCESSING_UNIT, selector, &mut buf)?;
+    Ok(i16::from_le_bytes(buf))
+}
+
+fn read_pu_u16(transport: &dyn Transport, selector: u8) -> Result<u16> {
+    let mut buf = [0u8; 2];
+    let _ = transport.uvc_get(UvcGet::Cur, uvc::PROCESSING_UNIT, selector, &mut buf)?;
+    Ok(u16::from_le_bytes(buf))
+}
+
 // ---- payload helpers (XU encodings still placeholders) ---------------------
 
 fn encode_wdr(mode: WdrMode) -> u8 {
@@ -715,5 +846,38 @@ mod tests {
     #[test]
     fn decode_rejects_unknown_byte() {
         assert!(matches!(decode_wdr(99), Err(Error::BadResponse { .. })));
+    }
+
+    #[test]
+    fn status_poller_emits_snapshots_when_sender_provided_and_stops_on_drop() {
+        use crate::testing::{meet2_mock_info, Forward, MockTransport};
+
+        let mock = Arc::new(MockTransport::default());
+        let transport: Arc<dyn Transport> = Arc::new(Forward(mock));
+        let (tx, rx) = crossbeam_channel::unbounded::<Event>();
+        let device = Device::new(meet2_mock_info(), transport, Some(tx));
+        device.set_status_cadence(Cadence::Fast);
+
+        // The poller emits its first sample immediately on entry to the
+        // loop, so a generous timeout here is purely defensive.
+        let ev = rx
+            .recv_timeout(Duration::from_millis(500))
+            .expect("first status event");
+        let Event::Status { snapshot, serial } = ev else {
+            panic!("expected Status event, got {ev:?}");
+        };
+        assert_eq!(serial, "MOCK");
+        // MockTransport zero-fills GETs, so every field reads as zero.
+        assert_eq!(snapshot.brightness, 0);
+        assert_eq!(snapshot.contrast, 0);
+        assert_eq!(snapshot.saturation, 0);
+
+        drop(device);
+
+        // After drop, drain any in-flight samples then assert the
+        // channel is quiet (poller exited).
+        std::thread::sleep(Duration::from_millis(100));
+        while rx.try_recv().is_ok() {}
+        assert!(rx.try_recv().is_err(), "poller still emitting after drop");
     }
 }

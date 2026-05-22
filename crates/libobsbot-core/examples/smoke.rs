@@ -7,7 +7,7 @@
 //! V4L2 ioctls on `/dev/videoN`; OBSBOT XU methods still return
 //! `Unsupported` until per-method captures land.
 
-use libobsbot_core::{AiMode, AutoFramingMode, Devices, Error, Event, WdrMode};
+use libobsbot_core::{AiMode, AutoFramingMode, Cadence, Devices, Error, Event, WdrMode};
 
 fn main() {
     if std::env::var_os("RUST_LOG").is_some() {
@@ -103,6 +103,25 @@ fn main() {
     match device.serial_from_camera() {
         Ok(s) => println!("{s}"),
         Err(e) => println!("{e}"),
+    }
+
+    // The poller runs on Cadence::Slow (2.5 s) by default. Bump to Fast
+    // so we see a couple of samples during the smoke run, then drain them.
+    device.set_status_cadence(Cadence::Fast);
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    println!("status poller samples (Cadence::Fast):");
+    let mut shown = 0;
+    while let Ok(ev) = events.try_recv() {
+        if let Event::Status { serial, snapshot } = ev {
+            println!(
+                "  status serial={serial:?} brightness={} contrast={} saturation={}",
+                snapshot.brightness, snapshot.contrast, snapshot.saturation
+            );
+            shown += 1;
+            if shown >= 3 {
+                break;
+            }
+        }
     }
 }
 

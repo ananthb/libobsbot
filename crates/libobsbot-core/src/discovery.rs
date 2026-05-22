@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::status::{Event, EventReceiver};
+use crate::status::{Event, EventReceiver, EventSender};
 use crate::types::ProductType;
 use crate::{Device, Result};
 
@@ -32,6 +32,7 @@ pub struct DeviceInfo {
 /// Construct with [`Devices::new`]. The watcher thread is spawned on
 /// `Devices::new` and stops when the struct is dropped.
 pub struct Devices {
+    events_tx: EventSender,
     events_rx: EventReceiver,
     /// Set by `Drop` to signal the watcher thread to exit.
     stop: Arc<std::sync::atomic::AtomicBool>,
@@ -43,8 +44,9 @@ impl Devices {
     pub fn new() -> Result<Self> {
         let (tx, rx) = crossbeam_channel::unbounded::<Event>();
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let watcher = spawn_hotplug_thread(tx, stop.clone());
+        let watcher = spawn_hotplug_thread(tx.clone(), stop.clone());
         Ok(Self {
+            events_tx: tx,
             events_rx: rx,
             stop,
             watcher: Some(watcher),
@@ -68,7 +70,11 @@ impl Devices {
         #[cfg(target_os = "linux")]
         {
             let transport = crate::transport::usb::UsbTransport::open(info)?;
-            Ok(Device::new(info.clone(), Box::new(transport)))
+            Ok(Device::new(
+                info.clone(),
+                Arc::new(transport),
+                Some(self.events_tx.clone()),
+            ))
         }
         #[cfg(not(target_os = "linux"))]
         {

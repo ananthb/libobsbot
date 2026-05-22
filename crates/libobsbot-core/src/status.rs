@@ -28,3 +28,7 @@ pub enum Event {
 
 /// Receiver end of the event channel returned by [`crate::Devices::events`].
 pub type EventReceiver = crossbeam_channel::Receiver<Event>;
+
+/// Sender end of the event channel; held internally by `Devices` and
+/// cloned into each opened `Device` so its status poller can push samples.
+pub(crate) type EventSender = crossbeam_channel::Sender<Event>;

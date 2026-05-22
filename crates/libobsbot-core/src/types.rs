@@ -85,6 +85,26 @@ pub enum MediaMode {
     AutoFrame,
 }
 
+/// How often the per-device status poller should sample state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cadence {
+    /// Slow polling for idle UIs (every 2.5 s).
+    Slow,
+    /// Fast polling for live UIs that need responsive readouts (every 25 ms).
+    Fast,
+}
+
+impl Cadence {
+    /// Sampling period in milliseconds.
+    #[must_use]
+    pub const fn period_ms(self) -> u32 {
+        match self {
+            Cadence::Slow => 2500,
+            Cadence::Fast => 25,
+        }
+    }
+}
+
 /// Snapshot of camera state pushed periodically by the status poller.
 #[derive(Debug, Clone, Default)]
 pub struct Status {
