@@ -37,6 +37,16 @@ int main(void) {
     int n = obsbot_devices_count(d);
     printf("connected obsbot cameras: %d\n", n);
 
+    /* Drain whatever the watcher emitted on startup (one DeviceAdded
+     * per connected camera). With no hardware the queue is empty and
+     * try_recv returns TIMEOUT. */
+    ObsbotEvent ev;
+    for (int i = 0; i < 16; i++) {
+        int rc = obsbot_devices_poll_event(d, &ev, 0);
+        if (rc != OBSBOT_OK) break;
+        printf("event kind=%d serial=\"%s\"\n", ev.kind, ev.serial);
+    }
+
     /* Every device setter must report OBSBOT_ERR_NOT_FOUND on NULL.
      * This covers the FFI argument-handling paths under valgrind
      * without needing a real camera. */
@@ -74,6 +84,13 @@ int main(void) {
     ObsbotStatus snap;
     EXPECT(obsbot_device_status(NULL, &snap),        OBSBOT_ERR_NOT_FOUND, "status");
     EXPECT(obsbot_device_status((ObsbotDevice *)0x1, NULL), OBSBOT_ERR_NOT_FOUND, "status null out");
+
+    int wb_mode = 0;
+    uint16_t kelvin = 0;
+    EXPECT(obsbot_device_white_balance(NULL, &wb_mode, &kelvin), OBSBOT_ERR_NOT_FOUND, "white_balance");
+
+    EXPECT(obsbot_devices_poll_event(NULL, &ev, 0),  OBSBOT_ERR_NOT_FOUND, "poll_event null handle");
+    EXPECT(obsbot_devices_poll_event(d, NULL, 0),    OBSBOT_ERR_NOT_FOUND, "poll_event null out");
 
     char buf[64];
     EXPECT(obsbot_device_firmware(NULL, buf, sizeof buf), OBSBOT_ERR_NOT_FOUND, "firmware");

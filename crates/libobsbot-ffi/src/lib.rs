@@ -107,6 +107,92 @@ pub unsafe extern "C" fn obsbot_devices_open_first(
     }
 }
 
+/// Event kind delivered by [`obsbot_devices_poll_event`].
+pub const OBSBOT_EVENT_DEVICE_ADDED: c_int = 1;
+/// See [`OBSBOT_EVENT_DEVICE_ADDED`].
+pub const OBSBOT_EVENT_DEVICE_REMOVED: c_int = 2;
+/// See [`OBSBOT_EVENT_DEVICE_ADDED`].
+pub const OBSBOT_EVENT_STATUS: c_int = 3;
+
+/// One event delivered by [`obsbot_devices_poll_event`]. For Added /
+/// Removed events the `status` fields are zeroed; for Status events
+/// every field is filled exactly as in
+/// [`obsbot_device_status`](crate::obsbot_device_status).
+#[repr(C)]
+pub struct ObsbotEvent {
+    /// One of the `OBSBOT_EVENT_*` constants.
+    pub kind: c_int,
+    /// Camera serial associated with the event. NUL-terminated.
+    pub serial: [c_char; OBSBOT_STR_MAX],
+    /// For Status events: the status snapshot. Zeroed otherwise.
+    pub status: ObsbotStatus,
+}
+
+/// Pull the next event off the registry's queue. `timeout_ms` < 0
+/// blocks indefinitely, 0 returns immediately if nothing is ready,
+/// > 0 waits up to that many milliseconds.
+///
+/// Returns `OBSBOT_OK` on success, `OBSBOT_ERR_TIMEOUT` when no event
+/// arrived within `timeout_ms`, and `OBSBOT_ERR_NOT_FOUND` for invalid
+/// arguments or a closed channel.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_devices_poll_event(
+    handle: *mut ObsbotDevices,
+    out_event: *mut ObsbotEvent,
+    timeout_ms: i32,
+) -> c_int {
+    if handle.is_null() || out_event.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    let rx = (*handle).0.events();
+    let received = match timeout_ms.cmp(&0) {
+        std::cmp::Ordering::Less => rx.recv().ok(),
+        std::cmp::Ordering::Equal => rx.try_recv().ok(),
+        std::cmp::Ordering::Greater => {
+            let dur = std::time::Duration::from_millis(timeout_ms.unsigned_abs().into());
+            rx.recv_timeout(dur).ok()
+        }
+    };
+    let Some(ev) = received else {
+        return OBSBOT_ERR_TIMEOUT;
+    };
+    ptr::write_bytes(out_event, 0, 1);
+    match ev {
+        libobsbot_core::Event::DeviceAdded { serial } => {
+            (*out_event).kind = OBSBOT_EVENT_DEVICE_ADDED;
+            copy_into_buf((*out_event).serial.as_mut_ptr(), OBSBOT_STR_MAX, &serial);
+        }
+        libobsbot_core::Event::DeviceRemoved { serial } => {
+            (*out_event).kind = OBSBOT_EVENT_DEVICE_REMOVED;
+            copy_into_buf((*out_event).serial.as_mut_ptr(), OBSBOT_STR_MAX, &serial);
+        }
+        libobsbot_core::Event::Status { serial, snapshot } => {
+            (*out_event).kind = OBSBOT_EVENT_STATUS;
+            copy_into_buf((*out_event).serial.as_mut_ptr(), OBSBOT_STR_MAX, &serial);
+            copy_into_buf(
+                (*out_event).status.firmware.as_mut_ptr(),
+                OBSBOT_STR_MAX,
+                &snapshot.firmware,
+            );
+            copy_into_buf(
+                (*out_event).status.serial.as_mut_ptr(),
+                OBSBOT_STR_MAX,
+                &snapshot.serial,
+            );
+            (*out_event).status.brightness = snapshot.brightness;
+            (*out_event).status.contrast = snapshot.contrast;
+            (*out_event).status.saturation = snapshot.saturation;
+            (*out_event).status.zoom = snapshot.zoom;
+            (*out_event).status.pan = snapshot.pan;
+            (*out_event).status.tilt = snapshot.tilt;
+        }
+        _ => {
+            (*out_event).kind = 0;
+        }
+    }
+    OBSBOT_OK
+}
+
 /// Free an `ObsbotDevice` previously returned by [`obsbot_devices_open_first`].
 /// Passing NULL is a no-op.
 #[no_mangle]
@@ -295,6 +381,30 @@ pub unsafe extern "C" fn obsbot_device_set_status_cadence(
     }
     (*handle).0.set_status_cadence(c);
     OBSBOT_OK
+}
+
+/// Read current white-balance mode + Kelvin value. `mode` follows the
+/// same encoding as [`obsbot_device_set_white_balance`].
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_white_balance(
+    handle: *mut ObsbotDevice,
+    out_mode: *mut c_int,
+    out_kelvin: *mut u16,
+) -> c_int {
+    if handle.is_null() || out_mode.is_null() || out_kelvin.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    match (*handle).0.white_balance() {
+        Ok((m, k)) => {
+            *out_mode = match m {
+                WhiteBalanceMode::Auto => 0,
+                WhiteBalanceMode::Manual => 1,
+            };
+            *out_kelvin = k;
+            OBSBOT_OK
+        }
+        Err(e) => map_error(&e),
+    }
 }
 
 /// Read current pan + tilt as normalised values in -1.0..=1.0.

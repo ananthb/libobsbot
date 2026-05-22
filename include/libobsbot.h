@@ -50,6 +50,21 @@
 #define OBSBOT_ERR_BAD_RESPONSE -7
 
 /**
+ * Event kind delivered by [`obsbot_devices_poll_event`].
+ */
+#define OBSBOT_EVENT_DEVICE_ADDED 1
+
+/**
+ * See [`OBSBOT_EVENT_DEVICE_ADDED`].
+ */
+#define OBSBOT_EVENT_DEVICE_REMOVED 2
+
+/**
+ * See [`OBSBOT_EVENT_DEVICE_ADDED`].
+ */
+#define OBSBOT_EVENT_STATUS 3
+
+/**
  * Maximum string length (including NUL) for [`ObsbotStatus`] fields.
  */
 #define OBSBOT_STR_MAX 64
@@ -105,6 +120,27 @@ typedef struct ObsbotStatus {
   float tilt;
 } ObsbotStatus;
 
+/**
+ * One event delivered by [`obsbot_devices_poll_event`]. For Added /
+ * Removed events the `status` fields are zeroed; for Status events
+ * every field is filled exactly as in
+ * [`obsbot_device_status`](crate::obsbot_device_status).
+ */
+typedef struct ObsbotEvent {
+  /**
+   * One of the `OBSBOT_EVENT_*` constants.
+   */
+  int kind;
+  /**
+   * Camera serial associated with the event. NUL-terminated.
+   */
+  char serial[OBSBOT_STR_MAX];
+  /**
+   * For Status events: the status snapshot. Zeroed otherwise.
+   */
+  struct ObsbotStatus status;
+} ObsbotEvent;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -130,6 +166,19 @@ int obsbot_devices_count(struct ObsbotDevices *handle);
  * `*out_device`. Returns one of the `OBSBOT_*` codes.
  */
 int obsbot_devices_open_first(struct ObsbotDevices *handle, struct ObsbotDevice **out_device);
+
+/**
+ * Pull the next event off the registry's queue. `timeout_ms` < 0
+ * blocks indefinitely, 0 returns immediately if nothing is ready,
+ * > 0 waits up to that many milliseconds.
+ *
+ * Returns `OBSBOT_OK` on success, `OBSBOT_ERR_TIMEOUT` when no event
+ * arrived within `timeout_ms`, and `OBSBOT_ERR_NOT_FOUND` for invalid
+ * arguments or a closed channel.
+ */
+int obsbot_devices_poll_event(struct ObsbotDevices *handle,
+                              struct ObsbotEvent *out_event,
+                              int32_t timeout_ms);
 
 /**
  * Free an `ObsbotDevice` previously returned by [`obsbot_devices_open_first`].
@@ -228,6 +277,12 @@ int obsbot_device_set_ai_mode(struct ObsbotDevice *handle, int mode);
  * Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
  */
 int obsbot_device_set_status_cadence(struct ObsbotDevice *handle, int cadence);
+
+/**
+ * Read current white-balance mode + Kelvin value. `mode` follows the
+ * same encoding as [`obsbot_device_set_white_balance`].
+ */
+int obsbot_device_white_balance(struct ObsbotDevice *handle, int *out_mode, uint16_t *out_kelvin);
 
 /**
  * Read current pan + tilt as normalised values in -1.0..=1.0.
