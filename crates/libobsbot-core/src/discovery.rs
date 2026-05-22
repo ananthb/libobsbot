@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Device enumeration and hot-plug.
 
+use std::sync::Arc;
+
 use crate::status::{Event, EventReceiver};
 use crate::types::ProductType;
 use crate::{Device, Result};
@@ -27,32 +29,32 @@ pub struct DeviceInfo {
 
 /// Owns the hot-plug watcher and the registry of connected cameras.
 ///
-/// Construct with [`Devices::new`]. Drop the handle to stop the watcher
-/// thread (no thread is spawned in v0.0.0 - added in M7).
+/// Construct with [`Devices::new`]. The watcher thread is spawned on
+/// `Devices::new` and stops when the struct is dropped.
 pub struct Devices {
-    // No state in v0.0.0. The hot-plug watcher thread + status registry land
-    // in M7. The struct is kept so that the public API is stable across the
-    // milestone progression.
-    _private: (),
+    events_rx: EventReceiver,
+    /// Set by `Drop` to signal the watcher thread to exit.
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    watcher: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Devices {
     /// Start the hot-plug watcher and return a handle.
     pub fn new() -> Result<Self> {
-        Ok(Self { _private: () })
+        let (tx, rx) = crossbeam_channel::unbounded::<Event>();
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let watcher = spawn_hotplug_thread(tx, stop.clone());
+        Ok(Self {
+            events_rx: rx,
+            stop,
+            watcher: Some(watcher),
+        })
     }
 
     /// Snapshot of currently-connected OBSBOT cameras.
     #[must_use]
     pub fn list(&self) -> Vec<DeviceInfo> {
-        #[cfg(target_os = "linux")]
-        {
-            linux::enumerate()
-        }
-        #[cfg(not(target_os = "linux"))]
-        {
-            Vec::new()
-        }
+        enumerate()
     }
 
     /// Find a connected camera by serial number.
@@ -77,14 +79,113 @@ impl Devices {
         }
     }
 
-    /// Subscribe to device add/remove and periodic status events.
-    ///
-    /// The receiver is currently never sent to - the hot-plug watcher lands
-    /// in M7. Returned eagerly so consumers can wire their event loops now.
+    /// Subscribe to device add/remove events. Each call returns a clone
+    /// of the receiver; events are broadcast to every clone.
     #[must_use]
     pub fn events(&self) -> EventReceiver {
-        let (_tx, rx) = crossbeam_channel::unbounded::<Event>();
-        rx
+        self.events_rx.clone()
+    }
+}
+
+impl Drop for Devices {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(handle) = self.watcher.take() {
+            // The thread checks `stop` between sleeps; give it one
+            // poll interval to wake and exit cleanly.
+            let _ = handle.join();
+        }
+    }
+}
+
+/// Live enumeration of OBSBOT cameras, regardless of platform.
+fn enumerate() -> Vec<DeviceInfo> {
+    #[cfg(target_os = "linux")]
+    {
+        linux::enumerate()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Vec::new()
+    }
+}
+
+/// How often the hot-plug thread polls the host for device changes.
+const HOTPLUG_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+
+fn spawn_hotplug_thread(
+    tx: crossbeam_channel::Sender<Event>,
+    stop: Arc<std::sync::atomic::AtomicBool>,
+) -> std::thread::JoinHandle<()> {
+    std::thread::Builder::new()
+        .name("libobsbot-hotplug".into())
+        .spawn(move || hotplug_loop(&tx, &stop))
+        .expect("spawn hotplug thread")
+}
+
+/// Diff-based hot-plug detector. Emits one `DeviceAdded` event per
+/// device present at startup, then a `DeviceAdded` or `DeviceRemoved`
+/// every time a poll-interval comparison sees the set change.
+fn hotplug_loop(tx: &crossbeam_channel::Sender<Event>, stop: &std::sync::atomic::AtomicBool) {
+    use std::collections::HashMap;
+    let mut known: HashMap<String, DeviceInfo> = HashMap::new();
+    while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+        let current: HashMap<String, DeviceInfo> = enumerate()
+            .into_iter()
+            .map(|d| (device_key(&d), d))
+            .collect();
+        // Additions.
+        for (k, info) in &current {
+            if !known.contains_key(k)
+                && tx
+                    .send(Event::DeviceAdded {
+                        serial: info.serial.clone(),
+                    })
+                    .is_err()
+            {
+                return;
+            }
+        }
+        // Removals.
+        for (k, info) in &known {
+            if !current.contains_key(k)
+                && tx
+                    .send(Event::DeviceRemoved {
+                        serial: info.serial.clone(),
+                    })
+                    .is_err()
+            {
+                return;
+            }
+        }
+        known = current;
+        // Sleep in small chunks so Drop can interrupt us promptly.
+        let mut slept = std::time::Duration::ZERO;
+        while slept < HOTPLUG_POLL_INTERVAL {
+            if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
+            let chunk = std::time::Duration::from_millis(100);
+            std::thread::sleep(chunk);
+            slept += chunk;
+        }
+    }
+}
+
+/// Stable key for a `DeviceInfo` so we can diff between polls.
+/// Uses busnum + devnum on Linux (the camera's iSerial is empty, so
+/// `info.serial` isn't a useful key without opening the device).
+fn device_key(info: &DeviceInfo) -> String {
+    #[cfg(target_os = "linux")]
+    {
+        format!("{}:{}", info.busnum, info.devnum)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        format!(
+            "{:04x}:{:04x}:{}",
+            info.vendor_id, info.product_id, info.serial
+        )
     }
 }
 
@@ -172,5 +273,14 @@ mod tests {
     fn by_serial_returns_none_when_empty() {
         let d = Devices::new().expect("ctor");
         assert!(d.by_serial("nonexistent").is_none());
+    }
+
+    #[test]
+    fn events_channel_open() {
+        let d = Devices::new().expect("ctor");
+        let rx = d.events();
+        // Drain whatever's already there; channel just needs to be alive.
+        while rx.try_recv().is_ok() {}
+        assert!(!rx.is_full(), "unbounded channel should never be full");
     }
 }

@@ -7,7 +7,7 @@
 //! V4L2 ioctls on `/dev/videoN`; OBSBOT XU methods still return
 //! `Unsupported` until per-method captures land.
 
-use libobsbot_core::{AiMode, AutoFramingMode, Devices, Error, WdrMode};
+use libobsbot_core::{AiMode, AutoFramingMode, Devices, Error, Event, WdrMode};
 
 fn main() {
     if std::env::var_os("RUST_LOG").is_some() {
@@ -20,6 +20,22 @@ fn main() {
         eprintln!("failed to start hot-plug watcher");
         std::process::exit(1);
     };
+
+    // Hot-plug events from the watcher thread. Drain whatever the
+    // initial scan emitted for cameras present at startup.
+    let events = devices.events();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    println!("hot-plug events so far:");
+    while let Ok(ev) = events.try_recv() {
+        match ev {
+            Event::DeviceAdded { serial } => println!("  + added  serial={serial:?}"),
+            Event::DeviceRemoved { serial } => println!("  - removed serial={serial:?}"),
+            Event::Status { serial, snapshot } => {
+                println!("  ~ status serial={serial:?} {snapshot:?}");
+            }
+            _ => println!("  ? unknown event variant"),
+        }
+    }
 
     let list = devices.list();
     if list.is_empty() {
