@@ -32,6 +32,12 @@ pub struct Device {
     info: DeviceInfo,
     transport: Arc<dyn Transport>,
     firmware: String,
+    /// MAC tail used in the per-command sentinel bytes of XU RPC frames.
+    /// Seeded with the originally captured value at construction; once
+    /// [`Device::status`] runs successfully against a real camera, the
+    /// reply's device-hash field would let us learn the actual MAC -
+    /// not wired up yet.
+    mac: [u8; 6],
     /// Poller period in milliseconds. Shared with the poller thread so
     /// [`Device::set_status_cadence`] can swap Slow/Fast on the fly.
     cadence_ms: Arc<AtomicU32>,
@@ -61,6 +67,7 @@ impl Device {
             info,
             transport,
             firmware: meet2::MIN_FW.to_owned(),
+            mac: meet2::CAPTURED_MAC,
             cadence_ms,
             poller_stop,
             poller,
@@ -120,22 +127,25 @@ impl Device {
     }
 
     /// Ask the camera for its firmware version via the XU RPC channel.
-    /// Sends a canned request frame captured from `libdev.so`; see
-    /// `doc/protocol/meet2/crc-investigation.md` for why this is canned
-    /// rather than freshly synthesised. Returns a dotted-decimal
-    /// string like `"4.4.6.1"`.
-    ///
-    /// The canned request frame embeds the MAC of the captured Meet 2;
-    /// other physical units will need their own canned frame until the
-    /// CRC at offset 6-7 is decoded.
+    /// Synthesises the request frame at runtime via
+    /// `meet2::build_rpc_frame` using the CRC-16/USB algorithm
+    /// recovered from `libdev.so`. Returns a dotted-decimal string
+    /// like `"4.4.6.1"`.
     pub fn firmware_from_camera(&self) -> Result<String> {
-        self.rpc_request_then_reply(&meet2::RPC_REQUEST_FIRMWARE, meet2::decode_firmware_reply)
+        let mut tail = [0u8; 6];
+        tail.copy_from_slice(&self.mac);
+        let request = meet2::build_rpc_frame(0x01, 0x01, 0x0D, 0x08, 0x04, &[], 18, &tail);
+        self.rpc_request_then_reply(&request, meet2::decode_firmware_reply)
     }
 
     /// Ask the camera for its serial number via the XU RPC channel.
-    /// Same canned-request caveat as [`firmware_from_camera`](Self::firmware_from_camera).
     pub fn serial_from_camera(&self) -> Result<String> {
-        self.rpc_request_then_reply(&meet2::RPC_REQUEST_SERIAL, meet2::decode_serial_reply)
+        let mut tail = [0u8; 8];
+        tail[..6].copy_from_slice(&self.mac);
+        tail[6] = 0x01;
+        tail[7] = 0x01;
+        let request = meet2::build_rpc_frame(0x01, 0x03, 0x0D, 0xC8, 0x18, &[], 24, &tail);
+        self.rpc_request_then_reply(&request, meet2::decode_serial_reply)
     }
 
     /// SET a canned `XU_SEL_RPC` request, then poll GET until `decode`
@@ -442,20 +452,18 @@ impl Device {
     /// Toggle face-based auto-focus.
     ///
     /// Face-focus rides the XU selector-0x02 RPC channel
-    /// (`cmd_set` 0x02, `cmd_id` 0x36) - not the simpler mode-register on
-    /// 0x06. Two canned request frames are sent verbatim, one per
-    /// state; see [`firmware_from_camera`](Self::firmware_from_camera)
-    /// for the per-device caveat (the frames embed the captured Meet 2's
-    /// MAC and CRC at offsets 6-7 / 14-15, both blocked on the CRC
-    /// decode in `doc/protocol/meet2/crc-investigation.md`).
+    /// (`cmd_set` 0x02, `cmd_id` 0x36). The frame is synthesised at
+    /// runtime via `meet2::build_rpc_frame`; the CRCs at `[6,7]` and
+    /// `[14,15]` are computed by the recovered CRC-16/USB routine.
     pub fn set_face_focus(&self, on: bool) -> Result<()> {
-        let request = if on {
-            &meet2::RPC_REQUEST_FACE_FOCUS_ON
-        } else {
-            &meet2::RPC_REQUEST_FACE_FOCUS_OFF
-        };
+        let payload = [u8::from(on), 0x00, 0x00, 0x00];
+        let mut tail = [0u8; 8];
+        tail[..6].copy_from_slice(&self.mac);
+        tail[6] = 0x01;
+        tail[7] = 0x01;
+        let request = meet2::build_rpc_frame(0x25, 0x04, 0x02, 0x02, 0x36, &payload, 26, &tail);
         self.transport
-            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_RPC, request)
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_RPC, &request)
     }
 
     /// Select media mode. XU mode-register control id `0x00` - see

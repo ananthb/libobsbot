@@ -1,120 +1,74 @@
-# Selector-0x02 CRC investigation: negative result
+# Selector-0x02 CRC: CRACKED (CRC-16/USB, libdev.so disassembly)
 
-Bytes 6-7 of every selector-0x02 RPC frame are a content-dependent
-checksum (same frame content always produces the same bytes across
-sessions on the same device). Cracking this is the prerequisite for
-synthesising RPC write requests; the read path needs no CRC from us.
+The bytes at frame offset `[6,7]` (outer) and `[14,15]` (inner) are
+**CRC-16/USB** (poly `0x8005`, init `0xFFFF`, refin and refout both
+true, xorout `0xFFFF`).
 
-This file records what's been tried, so the next attempt doesn't repeat
-the work.
+## How it was solved
 
-## What's known
+1. `libdev.so` ships with debug info and exports a function called
+   `calc_crc16` plus two 256-entry tables (`crc16_low_tab`,
+   `crc16_high_tab`).
+2. Disassembly of `calc_crc16` shows the classic two-table CRC-16
+   iteration:
 
-- The field is deterministic. Same frame content + sub-seq across three
-  separate captures on the same physical Meet 2 produced byte-identical
-  CRC values (`91 5c` for handshake message 1 in `initial_apply.pcapng`,
-  `setWdr.pcapng`, and `getStatus.pcapng`).
-- It's content-dependent. Different sub-seq, cmd_id, or payload bytes
-  produce different CRC values.
-- The eight known (frame, CRC) pairs are listed in
-  [getStatus.md](getStatus.md).
+   ```
+   index   = crc_lo XOR byte
+   crc_lo' = crc_hi XOR high_tab[index]
+   crc_hi' = low_tab[index]
+   ```
 
-## What's been tried (all negative)
+   wrapped with `~init` on entry and `~result` on exit. That's
+   identical to CRC-16/USB. The table values confirm
+   `table[1] = 0xC0C1`, the MODBUS / USB byte-for-byte pattern.
 
-### CRC16 catalog
+3. Disassembly of `RmProtocolMsg::frmHeaderProcessForSendV3` shows the
+   caller, and how it picks the byte range to CRC:
 
-Tested 30 standard CRC16 variants from the well-known catalog (ARC,
-CCITT-FALSE, CDMA2000, DDS-110, DECT-R/X, DNP, EN-13757, GENIBUS, GSM,
-IBM-SDLC, ISO-IEC-14443-3-A, KERMIT, LJ1200, MAXIM-DOW, MCRF4XX,
-MODBUS, NRSC-5, OPENSAFETY-A/B, PROFIBUS, RIELLO, SPI-FUJITSU,
-T10-DIF, TELEDISK, TMS37157, UMTS, USB, XMODEM, ...).
+   ```
+   outer_len = *(uint16_t *)(buf + 4)           // always 12
+   buf[6..8] = 0
+   buf[6..8] = calc_crc16(0, buf, outer_len)    // CRC over buf[0..12]
 
-Tested against 13 different "covered byte range" choices (everything
-except CRC, everything except CRC with the CRC field zeroed in the
-input, just bytes after the CRC, just the header before, the inner
-12 bytes claimed by the length field, etc.).
+   if (buf[1] & 0x60) {
+       inner_len = *(uint16_t *)(buf + 12)
+       buf[14..16] = 0
+       buf[14..16] = calc_crc16(0, buf + 12, inner_len + 4)
+                                                // CRC over buf[12..16+inner_len]
+   }
+   ```
 
-Both little-endian and big-endian interpretations of the CRC field
-were tried.
+   The outer CRC always runs; the inner CRC only when bit 5 or 6 of
+   `buf[1]` is set. For the firmware/serial requests (`buf[1] = 0x01`)
+   no inner CRC is computed; for face-focus (`buf[1] = 0x25`) one is.
 
-Result: zero matches; zero near-misses (no variant matched even half
-the frames).
+4. Rust reimplementation in `meet2::crc16_usb` + `meet2::build_rpc_frame`
+   reproduces all four originally captured frames byte-for-byte. The
+   live Meet 2 accepts the synthesised frames the same way it
+   accepted the canned ones.
 
-### Polynomial brute force
+## What's still device-specific
 
-Exhaustive sweep:
+The CRC is now under our control. The MAC tail
+(`ad b6 1b 98 dc 8d` for the captured device) is still hard-coded
+because we haven't yet learned it from the camera at open time. The
+mechanism is straightforward: pair 0 of the handshake (`cmd_id 0x08,
+sub-cmd-id 0x18`) returns 24 bytes whose last 6 ARE the MAC, with no
+MAC needed in the request. A follow-up will issue this query at
+`Device::open` and cache the result instead of using `CAPTURED_MAC`.
 
-- All 65536 16-bit polynomials.
-- All 4 reflection settings (none / both / refin only / refout only).
-- 7 initial values (`0x0000`, `0xFFFF`, plus several known catalog
-  init values).
-- 3 final-XOR values (`0x0000`, `0xFFFF`, `0x0001`).
-- The 4 most plausible byte-range choices.
+## What was tried before the libdev.so trace (preserved for posterity)
 
-Total: ~17M combinations, ran in ~3 minutes with table-based CRC16
-in Python. Result: zero matches.
+- CRC16 catalog: 30 standard variants over 13 byte-range choices, both
+  endiannesses. Zero matches. (The right algorithm was in the
+  catalog - CRC-16/USB - but our brute had the wrong byte range:
+  `buf[0..14]` instead of `buf[0..12]`, because the inner-CRC field
+  at `[14,15]` is *outside* the outer CRC's coverage even though it
+  sits just past it.)
+- Full 16-bit polynomial brute (~17M combos). Zero matches, for the
+  same byte-range reason.
+- Fletcher / Adler / byte-sum / XOR-of-pairs. Zero matches.
 
-### Non-CRC 16-bit checksums
-
-Tried Fletcher-16 (mod 255 and mod 256), Adler-16, byte-sum mod
-65536, XOR-of-u16-pairs. Same byte-range choices, same negative result.
-
-## What hasn't been tried (paths forward)
-
-### Algorithm involves the device-specific token
-
-The libdev.so debug log prints `token = d5 be df 2e 46 95` on every
-session for this device. The MAC suffix `ad b6 1b 98 dc 8d` is also
-embedded in handshake frames. If the CRC is something HMAC-like over
-`(content, token)`, brute force over a plain CRC16 space can't find
-it.
-
-A test to falsify this hypothesis: capture the same operation on a
-**second** physical Meet 2 (different MAC / different token) and
-compare CRC bytes for byte-identical content. If they differ, the
-token (or some derivative) is part of the CRC input.
-
-### Reveng
-
-[CRC RevEng](https://reveng.sourceforge.io/) reverse-engineers CRC
-parameters from sample inputs using GF(2) linear algebra rather than
-brute force. It can find non-catalog polynomials and is much more
-thorough than our brute. Not in nixpkgs; build from source. Feed it
-the eight (input, expected CRC) pairs and see if it can solve.
-
-### Non-linear / multiplicative
-
-If the algorithm uses multiplication, table-driven byte substitution
-(like an S-box), or rotations that aren't expressible as a linear CRC,
-RevEng won't help either. At that point the only honest path is
-either:
-
-- find the algorithm documented somewhere (none of the public
-  reverse-engineering projects - `obsbot_tiny_reversing`,
-  `meet4k`, `aaronsb/obsbot-camera-control` - have decoded it; they
-  all use "replay captured bytes verbatim"); or
-- accept the limitation and adopt the same replay-only approach for
-  novel operations, while using direct V4L2 + UVC standard controls
-  and the simpler selector-0x06 mode register for everything else.
-
-## Practical impact
-
-The decoded surfaces we can already drive don't need this CRC:
-
-- **Standard UVC** (brightness, contrast, saturation, WB, zoom, focus,
-  pan/tilt) - goes through V4L2 ioctls, no XU at all.
-- **Selector 0x06 mode register** (HDR, media mode, FOV, face AE) -
-  flat payload, no CRC field.
-
-The XU surfaces blocked on the CRC:
-
-- Status / firmware / serial / current-state reads. Reply parsing
-  works (`getStatus.md` decoded the bytes); we just can't synthesise
-  the SET that triggers a fresh reply.
-- Face focus, AI mode, auto-framing sub-mode (likely). These ride the
-  RPC channel too; uncertain until per-method captures land.
-
-A "replay mode" SDK option that ships canned RPC frames and lets the
-camera respond is implementable today, separately from cracking the
-CRC, and would unblock status polling. That's the next pragmatic
-move once we decide we've exhausted the decode angle.
+The lesson: read the binary before brute-forcing. The brute-force
+tooling worked; we just didn't know the input length was 12 (the
+`u16` at `buf[4..6]`) rather than 14.

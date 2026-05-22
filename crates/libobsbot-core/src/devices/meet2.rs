@@ -114,15 +114,18 @@ const RPC_GET_FIRMWARE: (u8, u8) = (0x08, 0x04);
 /// 14 ASCII bytes (NUL-padded). `getStatus.pcapng` frame 49.
 const RPC_GET_SERIAL: (u8, u8) = (0xC8, 0x18);
 
-/// Canned `XU_SEL_RPC` SET request that asks the camera for its
-/// firmware version. Captured at `doc/protocol/meet2/getStatus.pcapng`
-/// frame 28. Includes the CRC at offset 6-7 from the capture.
-///
-/// **Device-specific:** the MAC tail at offset 18-23
-/// (`ad b6 1b 98 dc 8d`) belongs to the captured unit. Until the CRC
-/// is cracked (see `doc/protocol/meet2/crc-investigation.md`), the
-/// canned bytes only address that one device; another Meet 2 would
-/// produce different CRC bytes and require a fresh capture.
+/// MAC tail of the originally captured Meet 2 (USB iSerial is unset,
+/// so the device-specific MAC suffix lives only in the camera's RPC
+/// `device-hash` reply). Used as a default seed for the per-device MAC
+/// in `Device`; the real value is learned at open time via
+/// [`build_rpc_handshake_macquery`].
+pub(crate) const CAPTURED_MAC: [u8; 6] = [0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d];
+
+/// Pinned test fixture: the captured firmware-request frame.
+/// Regenerated on demand by [`build_rpc_frame`] with the captured MAC.
+/// Kept as a `const` so unit tests can verify byte-for-byte that the
+/// builder still reproduces what `getStatus.pcapng` frame 28 showed.
+#[cfg(test)]
 pub(crate) const RPC_REQUEST_FIRMWARE: [u8; RPC_FRAME_LEN] = [
     0xaa, 0x01, 0x01, 0x00, 0x0c, 0x00, 0xc1, 0x50, 0x0a, 0x0d, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -130,9 +133,8 @@ pub(crate) const RPC_REQUEST_FIRMWARE: [u8; RPC_FRAME_LEN] = [
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
 
-/// Canned `XU_SEL_RPC` SET request that asks the camera for its
-/// serial number. Captured at `doc/protocol/meet2/getStatus.pcapng`
-/// frame 44. Same device-specific caveat as [`RPC_REQUEST_FIRMWARE`].
+/// Pinned test fixture: the captured serial-request frame.
+#[cfg(test)]
 pub(crate) const RPC_REQUEST_SERIAL: [u8; RPC_FRAME_LEN] = [
     0xaa, 0x01, 0x03, 0x00, 0x0c, 0x00, 0x31, 0x53, 0x0a, 0x0d, 0xc8, 0x18, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d, 0x01, 0x01,
@@ -140,10 +142,8 @@ pub(crate) const RPC_REQUEST_SERIAL: [u8; RPC_FRAME_LEN] = [
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
 
-/// Canned `XU_SEL_RPC` SET frame that enables face-based auto-focus.
-/// Captured from `setFaceFocusOn.pcapng` frame 52. `cmd_set` 0x02,
-/// `cmd_id` 0x36, 4-byte payload `[0x01, 0x00, 0x00, 0x00]`. Same
-/// device-specific caveat as [`RPC_REQUEST_FIRMWARE`].
+/// Pinned test fixture: the captured face-focus-on frame.
+#[cfg(test)]
 pub(crate) const RPC_REQUEST_FACE_FOCUS_ON: [u8; RPC_FRAME_LEN] = [
     0xaa, 0x25, 0x04, 0x00, 0x0c, 0x00, 0xd8, 0xc6, 0x0a, 0x02, 0x02, 0x36, 0x04, 0x00, 0xbf, 0xfb,
     0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d,
@@ -151,10 +151,8 @@ pub(crate) const RPC_REQUEST_FACE_FOCUS_ON: [u8; RPC_FRAME_LEN] = [
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
 
-/// Canned `XU_SEL_RPC` SET frame that disables face-based auto-focus.
-/// Captured from `setFaceFocusOff.pcapng` frame 52. Same payload
-/// shape as [`RPC_REQUEST_FACE_FOCUS_ON`] with value `[0x00, 0x00,
-/// 0x00, 0x00]`.
+/// Pinned test fixture: the captured face-focus-off frame.
+#[cfg(test)]
 pub(crate) const RPC_REQUEST_FACE_FOCUS_OFF: [u8; RPC_FRAME_LEN] = [
     0xaa, 0x25, 0x04, 0x00, 0x0c, 0x00, 0xd8, 0xc6, 0x0a, 0x02, 0x02, 0x36, 0x04, 0x00, 0xbe, 0x07,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d,
@@ -191,6 +189,102 @@ pub(crate) fn decode_serial_reply(buf: &[u8]) -> Option<String> {
         return None;
     }
     Some(core::str::from_utf8(bytes).ok()?.to_owned())
+}
+
+/// CRC-16/USB (poly `0x8005`, init `0xFFFF`, refin/refout=true,
+/// xorout=`0xFFFF`). This is the algorithm `libdev.so::calc_crc16`
+/// implements via its `crc16_low_tab` / `crc16_high_tab` lookup
+/// tables; see `doc/protocol/meet2/crc-investigation.md` for the
+/// disassembly trace that nailed it.
+pub(crate) fn crc16_usb(data: &[u8]) -> u16 {
+    let mut crc: u16 = 0xFFFF;
+    for &b in data {
+        crc ^= u16::from(b);
+        for _ in 0..8 {
+            if crc & 1 != 0 {
+                crc = (crc >> 1) ^ 0xA001;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    !crc
+}
+
+/// Build an `XU_SEL_RPC` request frame from its logical pieces, computing
+/// the outer CRC (and the inner one when bit 5 or 6 of `seq_byte` is
+/// set) the same way `libdev.so::frmHeaderProcessForSendV3` does.
+///
+/// Outer header layout (12 bytes covered by the outer CRC at `[6,7]`):
+///
+/// ```text
+/// offset 0:     0xAA               magic
+/// offset 1:     `seq_byte`         (libdev forces the low 10 bits to
+///                                  0x1AA; we accept the full byte from
+///                                  the original capture)
+/// offset 2:     `sub_seq`          increments per (request, reply) pair
+/// offset 3:     0x00               reserved
+/// offset 4-5:   `outer_len`        u16 LE; libdev always writes 12
+/// offset 6-7:   outer CRC          filled in by this helper
+/// offset 8:     0x0A               request direction marker
+/// offset 9:     `cmd_set`          varies per command family
+/// offset 10:    `cmd_id`
+/// offset 11:    `sub_cmd_id`
+/// ```
+///
+/// Inner section (covered by the inner CRC at `[14,15]` when
+/// `seq_byte & 0x60 != 0`):
+///
+/// ```text
+/// offset 12-13: `payload.len()` u16 LE
+/// offset 14-15: inner CRC (zeroed during CRC computation)
+/// offset 16..:  payload bytes
+/// ```
+///
+/// Everything past the inner section is left at whatever the caller
+/// supplies in `tail`. That's where the device-specific MAC and any
+/// per-command sentinel bytes live; the camera doesn't validate them
+/// via CRC, but it does seem to require the right MAC at the right
+/// offset for some commands.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_rpc_frame(
+    seq_byte: u8,
+    sub_seq: u8,
+    cmd_set: u8,
+    cmd_id: u8,
+    sub_cmd_id: u8,
+    payload: &[u8],
+    tail_offset: usize,
+    tail: &[u8],
+) -> [u8; RPC_FRAME_LEN] {
+    assert!(payload.len() + 16 <= RPC_FRAME_LEN, "payload too long");
+    assert!(tail_offset >= 16 + payload.len(), "tail overlaps payload");
+    assert!(tail_offset + tail.len() <= RPC_FRAME_LEN, "tail past frame");
+    let mut buf = [0u8; RPC_FRAME_LEN];
+    buf[0] = 0xAA;
+    buf[1] = seq_byte;
+    buf[2] = sub_seq;
+    let outer_len: u16 = 12;
+    buf[4..6].copy_from_slice(&outer_len.to_le_bytes());
+    buf[8] = 0x0A;
+    buf[9] = cmd_set;
+    buf[10] = cmd_id;
+    buf[11] = sub_cmd_id;
+    let inner_len = u16::try_from(payload.len()).expect("payload fits in u16");
+    buf[12..14].copy_from_slice(&inner_len.to_le_bytes());
+    buf[16..16 + payload.len()].copy_from_slice(payload);
+    buf[tail_offset..tail_offset + tail.len()].copy_from_slice(tail);
+
+    let outer = crc16_usb(&buf[..usize::from(outer_len)]);
+    buf[6..8].copy_from_slice(&outer.to_le_bytes());
+
+    if seq_byte & 0x60 != 0 {
+        let inner_end = 16 + payload.len();
+        let inner = crc16_usb(&buf[12..inner_end]);
+        buf[14..16].copy_from_slice(&inner.to_le_bytes());
+    }
+
+    buf
 }
 
 /// Pull (`cmd_id`, `sub_cmd_id`, payload) out of an `XU_SEL_RPC` GET
@@ -230,6 +324,61 @@ mod tests {
         let off = mode_register_payload(MODE_WDR, &[0]);
         assert_eq!(off[..3], [0x01, 0x01, 0x00]);
         assert!(off[3..].iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn crc16_usb_matches_known_vectors() {
+        // CRC-16/USB("123456789") = 0xB4C8 per the CRC catalog.
+        assert_eq!(crc16_usb(b"123456789"), 0xB4C8);
+        // Zero-byte input: CRC starts at 0xFFFF; final XOR (NOT) is 0x0000.
+        assert_eq!(crc16_usb(b""), 0x0000);
+    }
+
+    #[test]
+    fn build_rpc_frame_reproduces_canned_firmware_request() {
+        // RPC_REQUEST_FIRMWARE: seq=0x01 sub=0x01 cmd_set=0x0D
+        // cmd=0x08 sub_cmd=0x04 no payload, MAC at [18..24].
+        let mac = [0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d];
+        let built = build_rpc_frame(0x01, 0x01, 0x0D, 0x08, 0x04, &[], 18, &mac);
+        assert_eq!(built, RPC_REQUEST_FIRMWARE);
+    }
+
+    #[test]
+    fn build_rpc_frame_reproduces_canned_serial_request() {
+        // RPC_REQUEST_SERIAL: seq=0x01 sub=0x03 cmd_set=0x0D
+        // cmd=0xC8 sub_cmd=0x18 no payload, MAC at [24..30] + sentinel
+        // `01 01` at [30..32].
+        let mut tail = [0u8; 8];
+        tail[..6].copy_from_slice(&[0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d]);
+        tail[6] = 0x01;
+        tail[7] = 0x01;
+        let built = build_rpc_frame(0x01, 0x03, 0x0D, 0xC8, 0x18, &[], 24, &tail);
+        assert_eq!(built, RPC_REQUEST_SERIAL);
+    }
+
+    #[test]
+    fn build_rpc_frame_reproduces_canned_face_focus_on() {
+        // RPC_REQUEST_FACE_FOCUS_ON: seq=0x25 (triggers inner CRC since
+        // 0x25 & 0x60 = 0x20), sub=0x04, cmd_set=0x02 cmd=0x02 sub_cmd=0x36
+        // payload=[01,00,00,00], MAC at [26..32], sentinel `01 01` at [32,33].
+        let payload = [0x01, 0x00, 0x00, 0x00];
+        let mut tail = [0u8; 8];
+        tail[..6].copy_from_slice(&[0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d]);
+        tail[6] = 0x01;
+        tail[7] = 0x01;
+        let built = build_rpc_frame(0x25, 0x04, 0x02, 0x02, 0x36, &payload, 26, &tail);
+        assert_eq!(built, RPC_REQUEST_FACE_FOCUS_ON);
+    }
+
+    #[test]
+    fn build_rpc_frame_reproduces_canned_face_focus_off() {
+        let payload = [0x00, 0x00, 0x00, 0x00];
+        let mut tail = [0u8; 8];
+        tail[..6].copy_from_slice(&[0xad, 0xb6, 0x1b, 0x98, 0xdc, 0x8d]);
+        tail[6] = 0x01;
+        tail[7] = 0x01;
+        let built = build_rpc_frame(0x25, 0x04, 0x02, 0x02, 0x36, &payload, 26, &tail);
+        assert_eq!(built, RPC_REQUEST_FACE_FOCUS_OFF);
     }
 
     #[test]
