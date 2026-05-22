@@ -70,7 +70,7 @@ from observed USB wire behavior and public sources.</p>
 <h2>The audit trail</h2>
 <p>Every selector value, payload byte layout, or protocol assumption in
 source <strong>must</strong> point at a committed <code>.pcapng</code>
-under <code>docs/protocol/&lt;model&gt;/</code> and a companion
+under <code>doc/protocol/&lt;model&gt;/</code> and a companion
 <code>.md</code> file that describes how the bytes were derived. The
 commit that introduces the constant must reference the capture in its
 message:</p>
@@ -79,8 +79,8 @@ message:</p>
 Captured 2026-05-23 with usbmon3 + Wireshark while sliding the brightness
 control in OBSBOT's GUI through min/mid/max values.
 
-Refs: docs/protocol/meet2/setBrightness.pcapng,
-      docs/protocol/meet2/setBrightness.md</code></pre>
+Refs: doc/protocol/meet2/setBrightness.pcapng,
+      doc/protocol/meet2/setBrightness.md</code></pre>
 <p>A PR that adds a magic constant without a capture cannot be
 merged.</p>
 

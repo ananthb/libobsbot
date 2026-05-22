@@ -34,7 +34,7 @@
 <h1>OBSBOT Meet 2 protocol</h1>
 
 <p>This is the human-readable view of the audit trail at
-<a href="https://github.com/ananthb/libobsbot/tree/main/docs/protocol/meet2"><code>docs/protocol/meet2/</code></a>.
+<a href="https://github.com/ananthb/libobsbot/tree/main/doc/protocol/meet2"><code>doc/protocol/meet2/</code></a>.
 Every selector value and byte layout in
 <code>crates/libobsbot-core/src/devices/meet2.rs</code> must be backed
 by a committed <code>.pcapng</code> there, with a matching
@@ -45,7 +45,7 @@ permitted.</p>
 <h2>Camera-level identifiers</h2>
 <p>Read from <code>lsusb -v -d 3564:fefb</code> against the unit used
 for capture. The full descriptor dump is in
-<a href="https://github.com/ananthb/libobsbot/blob/main/docs/protocol/meet2/descriptors.txt"><code>descriptors.txt</code></a>.</p>
+<a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/descriptors.txt"><code>descriptors.txt</code></a>.</p>
 <table>
   <tbody>
     <tr><td>USB vendor id</td><td><code>0x3564</code> (Remo Tech Co., Ltd.)</td></tr>
@@ -67,7 +67,7 @@ big-endian), which is what the UVC class expects when matching the XU.</p>
 <h2>Control-surface split</h2>
 <p>The camera exposes two control surfaces, only one of which is
 OBSBOT-specific. This came out of the first
-<a href="https://github.com/ananthb/libobsbot/blob/main/docs/protocol/meet2/initial_apply.pcapng">capture</a>
+<a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/initial_apply.pcapng">capture</a>
 of OBSBOT's <code>libdev.so</code> driving the device:</p>
 <table>
   <thead>
@@ -150,7 +150,7 @@ padded to 60 bytes with 0x00</code></pre>
   <li>Manipulate <strong>only</strong> the control under test &mdash; e.g.
       slide brightness to min, mid, max in sequence.</li>
   <li>Stop the capture, save it under
-      <code>docs/protocol/meet2/</code> as
+      <code>doc/protocol/meet2/</code> as
       <code>&lt;methodName&gt;.pcapng</code>.</li>
   <li>In Wireshark, filter
       <code>usb.bmRequestType == 0x21 &amp;&amp; usb.setup.bRequest == 0x01</code>

@@ -37,7 +37,7 @@ The following inputs **are** permitted:
 ## The audit trail
 
 Every selector value, payload byte layout, or protocol assumption in source
-**must** point at a committed `.pcapng` under `docs/protocol/<model>/` and a
+**must** point at a committed `.pcapng` under `doc/protocol/<model>/` and a
 companion `.md` file that describes how the bytes were derived. The commit
 that introduces the constant must reference the capture in its message:
 
@@ -47,8 +47,8 @@ meet2: add brightness selector
 Captured 2026-05-22 with usbmon1 + Wireshark while sliding the brightness
 control in OBSBOT's GUI through min/mid/max values.
 
-Refs: docs/protocol/meet2/setBrightness.pcapng,
-      docs/protocol/meet2/setBrightness.md
+Refs: doc/protocol/meet2/setBrightness.pcapng,
+      doc/protocol/meet2/setBrightness.md
 ```
 
 A PR that adds a magic constant without a capture cannot be merged.
