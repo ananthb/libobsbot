@@ -54,18 +54,26 @@ stable C ABI so the same library can drive PTZ, image controls, white
 balance, HDR, FOV, face AE/focus, AI auto-framing, and audio controls
 from any GPL-compatible application.</p>
 
-<p><strong>Status:</strong> v0.0.0 &mdash; pre-release. The
+<p><strong>Status:</strong> v0.0.0 - pre-release. The
 <a href="protocol.html">protocol capture phase</a> is underway. Today
 the workspace skeleton compiles, the standard UVC routing layer is in
 place, and the audit-trail format is established.</p>
 
 <nav>
+  <a href="hardware.html">Hardware support</a>
+  <a href="captures.html">Capture procedure</a>
   <a href="architecture.html">Architecture</a>
   <a href="protocol.html">Protocol</a>
   <a href="sourcing.html">Sourcing rule</a>
   <a href="api/libobsbot_core/index.html">API docs</a>
   <a href="https://github.com/ananthb/libobsbot">Source</a>
 </nav>
+
+<p style="margin-top:1rem; padding:0.6rem 0.8rem; background:var(--code-bg); border-radius:6px;">
+<strong>Got an OBSBOT camera we don't support?</strong>
+See the <a href="hardware.html">hardware-support matrix</a> and
+<a href="https://github.com/ananthb/libobsbot/issues/new?template=new-hardware.yml">open a new-hardware issue</a> with a <code>.pcapng</code> attached.
+</p>
 
 <h2>Scope (v1)</h2>
 <ul>
@@ -75,7 +83,7 @@ place, and the audit-trail format is established.</p>
       focus, brightness/contrast/saturation, white balance, HDR, FOV,
       face AE/focus, AI auto-framing, audio AGC) plus hot-plug + status
       events</li>
-  <li>Three platforms: Linux, macOS, Windows (with caveats &mdash; see
+  <li>Three platforms: Linux, macOS, Windows (with caveats - see
       below)</li>
 </ul>
 
@@ -92,7 +100,7 @@ modes) are out of scope for v1.</p>
     <tr>
       <td>Linux</td>
       <td>First-class. Goal: work while the camera is also open in
-          Zoom/OBS/Cheese &mdash; route through the <code>uvcvideo</code>
+          Zoom/OBS/Cheese - route through the <code>uvcvideo</code>
           driver rather than detaching it.</td>
     </tr>
     <tr>

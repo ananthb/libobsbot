@@ -10,6 +10,13 @@ controls from any GPL-compatible application.
 Today the workspace skeleton compiles and the standard UVC routing layer
 is in place. Full docs at <https://ananthb.github.io/libobsbot/>.
 
+> **Have an OBSBOT camera we don't yet support?** The fastest way to
+> add it is a USB packet capture. See the
+> [hardware-support matrix](https://ananthb.github.io/libobsbot/hardware.html)
+> and [open a new-hardware issue](https://github.com/ananthb/libobsbot/issues/new?template=new-hardware.yml)
+> with a `.pcapng` attached — we'll do the protocol-decode work from
+> there.
+
 ## Platforms
 
 | OS | Notes |

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capture procedure - libobsbot</title>
+<style>
+  :root { --bg: #fff; --fg: #1a1a1a; --muted: #666; --accent: #2b6cb0; --code-bg: #f5f5f5; --border: #e2e2e2; --max-w: 740px; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1a1a1a; --fg: #e0e0e0; --muted: #999; --accent: #63b3ed; --code-bg: #2d2d2d; --border: #404040; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
+  .container { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.2rem; margin-bottom: 0.3rem; }
+  p { margin: 0.5rem 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 0.75rem 0; font-size: 0.85em; }
+  pre code { background: none; padding: 0; }
+  nav { margin: 0.5rem 0 1.5rem; }
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; }
+  th { background: var(--code-bg); }
+  .note { padding: 0.6rem 0.8rem; background: var(--code-bg); border-radius: 6px; margin: 0.75rem 0; }
+</style>
+</head>
+<body>
+<div class="container">
+<nav><a href="index.html">&larr; libobsbot</a></nav>
+<h1>How to record a USB packet capture for libobsbot</h1>
+
+<p>The protocol decode for any OBSBOT camera that libobsbot supports
+starts with a <code>.pcapng</code> file: USB traffic captured while
+OBSBOT's own software drives the camera. This page is the exact
+recipe per OS. When you have a file, <a href="https://github.com/ananthb/libobsbot/issues/new?template=new-hardware.yml">attach it to a new-hardware issue</a>
+and we'll do the protocol decode + Rust wiring.</p>
+
+<div class="note"><strong>Sourcing note:</strong> capturing the wire
+behavior of OBSBOT's released software is fine; disassembling,
+decompiling, or symbol-dumping the closed-source <code>libdev.so</code> /
+<code>libdev.dylib</code> / <code>libdev.dll</code> binaries is not.
+See the <a href="sourcing.html">sourcing rule</a>.</div>
+
+<h2>What you need (all platforms)</h2>
+
+<ul>
+  <li>The OBSBOT camera plugged in via USB.</li>
+  <li><a href="https://www.wireshark.org/download.html">Wireshark</a>
+      (with its CLI siblings <code>dumpcap</code> and
+      <code>tshark</code>). The official installer ships every USB
+      capture component you need.</li>
+  <li>A piece of OBSBOT software to <em>drive</em> the camera while you
+      capture - one API call per capture, ideally:
+      <ul>
+        <li><strong>Linux:</strong>
+            <a href="https://github.com/aaronsb/obsbot-camera-control">aaronsb/obsbot-camera-control</a>
+            (open source, links <code>libdev.so</code>). Build the
+            <code>obsbot-cli</code> binary; its <code>--interactive</code>
+            mode gives one-keystroke toggles for HDR and AI mode. For the
+            controls the CLI doesn't expose, use
+            <a href="https://github.com/ananthb/libobsbot/blob/main/tools/meet2-exercise/meet2_exercise.cpp">tools/meet2-exercise</a>
+            in this repo - one API per invocation.</li>
+        <li><strong>macOS or Windows:</strong>
+            <a href="https://www.obsbot.com/download">OBSBOT Studio</a>
+            (official, free). Touch one control at a time in its UI
+            during the capture.</li>
+      </ul>
+  </li>
+</ul>
+
+<h2>Linux</h2>
+
+<h3>1. Enable usbmon</h3>
+
+<pre><code class="language-bash"># One-time per boot. `run0` is the systemd equivalent of sudo.
+sudo modprobe usbmon
+sudo setfacl -m u:$USER:r /dev/usbmon*</code></pre>
+
+<h3>2. Find the camera's bus + device number</h3>
+
+<pre><code class="language-bash">lsusb | grep -i obsbot
+# e.g. "Bus 003 Device 015: ID 3564:fefb Remo Tech Co., Ltd. OBSBOT Meet 2"
+#       bus = 3, dev = 15</code></pre>
+
+<h3>3. Capture during one operation</h3>
+
+<pre><code class="language-bash"># Start the capture on the bus the camera is on. -q silences the
+# packet-count chatter.
+dumpcap -i usbmon3 -w /tmp/raw.pcapng -q &amp;
+sleep 1
+
+# Drive ONE camera operation. Examples:
+#   obsbot-cli --interactive    # then press h to enable HDR
+#   ./meet2-exercise --set-wdr 1
+#   ./meet2-exercise --set-fov 1
+
+# Stop the capture.
+kill -INT %1
+wait</code></pre>
+
+<h3>4. Filter to the camera and save</h3>
+
+<pre><code class="language-bash"># Replace 15 with your camera's device number.
+tshark -r /tmp/raw.pcapng \
+  -Y 'usb.device_address == 15' \
+  -w setWdr.pcapng
+# &lt;methodName&gt;.pcapng is the convention; one per API call.</code></pre>
+
+<h2>macOS</h2>
+
+<p>macOS doesn't have <code>usbmon</code>. Wireshark on macOS uses
+Apple's <code>XHC*</code> interfaces, which expose USB traffic per
+USB host controller. You need root to read them.</p>
+
+<h3>1. Install Wireshark and grant access</h3>
+
+<p>Install Wireshark from
+<a href="https://www.wireshark.org/download.html">wireshark.org</a>.
+During installation it asks whether to grant non-root capture access - say yes. If you skipped that:</p>
+
+<pre><code class="language-bash">sudo /Library/Application\ Support/Wireshark/ChmodBPF/ChmodBPF</code></pre>
+
+<h3>2. Find the camera's host controller</h3>
+
+<pre><code class="language-bash">system_profiler SPUSBDataType | grep -B 3 -A 8 -i obsbot</code></pre>
+
+<p>The output lists the camera under one of the USB host controllers
+(<code>USB30Bus</code>, <code>USB31Bus</code>, ...). The matching capture
+interface in Wireshark is <code>XHC0</code>, <code>XHC1</code>,
+<code>XHC20</code>, etc. on Intel Macs, or
+<code>XHC{0,1,2,3}</code> on Apple Silicon.</p>
+
+<h3>3. Capture during one operation</h3>
+
+<pre><code class="language-bash"># List USB interfaces:
+tshark -D | grep XHC
+#   1. XHC0
+#   2. XHC1
+#   ...
+
+# Capture on the right one:
+sudo tshark -i XHC20 -w /tmp/raw.pcapng &amp;
+sleep 1
+
+# Open OBSBOT Studio. Touch ONE control (e.g. HDR toggle). Wait a
+# second to make sure the packets are flushed.
+
+kill -INT %1
+wait</code></pre>
+
+<h3>4. Filter to the camera</h3>
+
+<p>The macOS capture format embeds USB endpoints differently from
+<code>usbmon</code>. Filter by vendor + product:</p>
+
+<pre><code class="language-bash">tshark -r /tmp/raw.pcapng \
+  -Y 'usb.idVendor == 0x3564 &amp;&amp; usb.idProduct == 0xfefb' \
+  -w setWdr.pcapng
+# Adjust idVendor / idProduct for your camera.</code></pre>
+
+<h2>Windows</h2>
+
+<p>Windows captures use <strong>USBPcap</strong>, which the standard
+Wireshark installer bundles.</p>
+
+<h3>1. Install Wireshark + USBPcap</h3>
+
+<p>Download the Wireshark installer from
+<a href="https://www.wireshark.org/download.html">wireshark.org</a> and
+leave the USBPcap option ticked. Reboot when prompted (the USBPcap
+kernel driver needs it).</p>
+
+<h3>2. Find the camera's USBPcap interface</h3>
+
+<p>Open a PowerShell or Command Prompt:</p>
+
+<pre><code class="language-powershell">"C:\Program Files\Wireshark\dumpcap.exe" -D
+# Lists "USBPcap1", "USBPcap2", ... one per USB root hub.
+# Plug the camera into a different port if you need to isolate which
+# bus it's on; Device Manager shows the parent hub.</code></pre>
+
+<h3>3. Capture during one operation</h3>
+
+<pre><code class="language-powershell"># Pick the USBPcap interface that owns the bus your camera is on.
+"C:\Program Files\Wireshark\dumpcap.exe" -i USBPcap2 -w C:\Temp\raw.pcapng
+
+# (Leave this running.) Touch ONE control in OBSBOT Studio.
+# Ctrl-C to stop dumpcap.</code></pre>
+
+<h3>4. Filter to the camera</h3>
+
+<pre><code class="language-powershell">"C:\Program Files\Wireshark\tshark.exe" -r C:\Temp\raw.pcapng `
+  -Y "usb.idVendor == 0x3564 && usb.idProduct == 0xfefb" `
+  -w C:\Temp\setWdr.pcapng</code></pre>
+
+<h2>Naming and what to attach</h2>
+
+<p>Name files <code>set&lt;Method&gt;.pcapng</code> or
+<code>get&lt;Method&gt;.pcapng</code> based on the OBSBOT API name
+you drove (e.g. <code>setWdr.pcapng</code>,
+<code>setFovU.pcapng</code>). Capture each control as a separate file
+ - cleanly isolated captures save us hours of decode work.</p>
+
+<p>If your camera isn't on the
+<a href="hardware.html">hardware-support matrix</a>, also include a
+descriptor dump:</p>
+
+<pre><code class="language-bash"># Linux
+lsusb -v -d &lt;vid&gt;:&lt;pid&gt; &gt; descriptors.txt
+# macOS
+system_profiler SPUSBDataType &gt; descriptors.txt
+# Windows
+"C:\Program Files\Wireshark\dumpcap.exe" -i USBPcap2 -w C:\Temp\enum.pcapng
+# (then plug the camera in while it's running — the enumeration shows
+# every descriptor we need)</code></pre>
+
+<p>Attach the <code>.pcapng</code> (and <code>descriptors.txt</code> if
+applicable) to a
+<a href="https://github.com/ananthb/libobsbot/issues/new?template=new-hardware.yml">new-hardware issue</a>.</p>
+
+</div>
+</body>
+</html>

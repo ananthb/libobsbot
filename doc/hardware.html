@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hardware support - libobsbot</title>
+<style>
+  :root { --bg: #fff; --fg: #1a1a1a; --muted: #666; --accent: #2b6cb0; --code-bg: #f5f5f5; --border: #e2e2e2; --max-w: 740px; --ok: #10804a; --pending: #b85b00; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1a1a1a; --fg: #e0e0e0; --muted: #999; --accent: #63b3ed; --code-bg: #2d2d2d; --border: #404040; --ok: #4ade80; --pending: #fbbf24; } }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
+  .container { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.3rem; margin-top: 2rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.3rem; }
+  p { margin: 0.5rem 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 0.75rem 0; }
+  nav { margin: 0.5rem 0 1.5rem; }
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .ok { color: var(--ok); font-weight: 600; }
+  .pending { color: var(--pending); font-weight: 600; }
+  .cta { display: inline-block; padding: 0.6rem 1rem; background: var(--accent); color: white; border-radius: 6px; font-weight: 600; margin: 0.5rem 0; }
+  .cta:hover { text-decoration: none; opacity: 0.9; }
+</style>
+</head>
+<body>
+<div class="container">
+<nav><a href="index.html">&larr; libobsbot</a></nav>
+<h1>Hardware support</h1>
+
+<p>What libobsbot can drive today, and what's pending. A model becomes
+supported once it has a confirmed VID:PID, a descriptor dump, and at
+least one decoded control with a per-method pcap under
+<code>doc/protocol/&lt;model&gt;/</code>. See the
+<a href="sourcing.html">sourcing rule</a> for how protocol evidence is
+admitted.</p>
+
+<p><strong>Got an OBSBOT camera that isn't listed below?</strong> The
+fastest path to support is to record a USB packet capture while OBSBOT's
+own software talks to it.</p>
+
+<p><a class="cta" href="https://github.com/ananthb/libobsbot/issues/new?template=new-hardware.yml">Submit a new-hardware request &rarr;</a></p>
+
+<h2>Supported</h2>
+
+<h3>OBSBOT Meet 2 - <span class="ok">in progress</span></h3>
+
+<p>USB <code>3564:fefb</code>, <code>bcdDevice = 5.10</code>, XU GUID
+<code>{9a1e7291-6843-4683-6d92-39bc7906ee49}</code> (entity 2, 7 controls).
+See <a href="protocol.html">protocol notes</a>.</p>
+
+<table>
+  <thead>
+    <tr><th>Control</th><th>Path</th><th>Status</th><th>Evidence</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>brightness, contrast, saturation</td>
+      <td>standard UVC <code>ProcessingUnit</code></td>
+      <td class="ok">working end-to-end</td>
+      <td>UVC 1.5 &sect;A.9.5 (no per-method pcap required)</td>
+    </tr>
+    <tr>
+      <td>WB temperature, WB auto</td>
+      <td>standard UVC <code>ProcessingUnit</code></td>
+      <td class="ok">wired</td>
+      <td>UVC 1.5 &sect;A.9.5</td>
+    </tr>
+    <tr>
+      <td>zoom, focus, pan/tilt</td>
+      <td>standard UVC <code>CameraTerminal</code></td>
+      <td class="ok">working end-to-end (pan/tilt centred against live camera)</td>
+      <td>UVC 1.5 &sect;A.9.4</td>
+    </tr>
+    <tr>
+      <td>HDR (WDR)</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x01</code></td>
+      <td class="ok">decoded + verified on hardware</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setWdr.md">setWdr.md</a></td>
+    </tr>
+    <tr>
+      <td>media mode</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x00</code></td>
+      <td class="ok">decoded</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setMediaMode.md">setMediaMode.md</a></td>
+    </tr>
+    <tr>
+      <td>FOV preset</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x04</code></td>
+      <td class="ok">decoded</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setFov.md">setFov.md</a></td>
+    </tr>
+    <tr>
+      <td>face AE</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x03</code></td>
+      <td class="ok">decoded</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setFaceAE.md">setFaceAE.md</a></td>
+    </tr>
+    <tr>
+      <td>face focus</td>
+      <td>XU selector <code>0x02</code> RPC frame</td>
+      <td class="pending">captured, format pending</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setFaceFocus.md">setFaceFocus.md</a></td>
+    </tr>
+    <tr>
+      <td>auto-framing sub-mode</td>
+      <td>XU (selector pending)</td>
+      <td class="pending">no capture yet</td>
+      <td> - </td>
+    </tr>
+    <tr>
+      <td>AI master mode, AI auto-zoom, track speed</td>
+      <td>XU (selector pending)</td>
+      <td class="pending">no capture yet</td>
+      <td> - </td>
+    </tr>
+    <tr>
+      <td>audio AGC</td>
+      <td>standard USB Audio Class</td>
+      <td class="pending">stub only</td>
+      <td> - </td>
+    </tr>
+    <tr>
+      <td>status (firmware / serial / current state)</td>
+      <td>XU selector <code>0x02</code> RPC frame</td>
+      <td class="pending">handshake captured, framing not decoded</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/initial_apply.md">initial_apply.md</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Pending</h2>
+
+<p>Other OBSBOT cameras have not been touched. Patches accepted; the
+quickest contribution is just a pcap of OBSBOT's own software driving
+the camera. <a href="https://github.com/ananthb/libobsbot/issues/new?template=new-hardware.yml">File a new-hardware issue</a>
+with the capture attached and we'll do the protocol-decode work.</p>
+
+<table>
+  <thead><tr><th>Model</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>OBSBOT Tiny / Tiny 2 / Tiny 2 Lite / Tiny 4K / Tiny SE</td><td class="pending">no pcap, no decode</td></tr>
+    <tr><td>OBSBOT Meet / Meet 4K / Meet SE</td><td class="pending">no pcap, no decode</td></tr>
+    <tr><td>OBSBOT Tail Air</td><td class="pending">no pcap, no decode</td></tr>
+    <tr><td>OBSBOT Talent / ME / Marker</td><td class="pending">no pcap, no decode</td></tr>
+    <tr><td>Anything not listed</td><td class="pending">file an issue</td></tr>
+  </tbody>
+</table>
+
+<h2>How a "supported" model gets here</h2>
+
+<ol>
+  <li>VID:PID confirmed and committed as
+      <code>descriptors.txt</code> under
+      <code>doc/protocol/&lt;model&gt;/</code>.</li>
+  <li>Per-control pcaps of OBSBOT's own software, captured per the
+      <a href="captures.html">capture procedure</a>. One pcap per
+      method, filtered to the camera's USB device address.</li>
+  <li>A short <code>.md</code> next to each pcap explaining which bytes
+      are which, derived only from the capture and public sources.</li>
+  <li>A Rust constant in
+      <code>crates/libobsbot-core/src/devices/&lt;model&gt;.rs</code>
+      with a golden-byte test asserting the payload matches the pcap.</li>
+</ol>
+
+<p>The current Meet 2 entries in the table above are the worked example.
+Steps 1&ndash;3 can come from a user-submitted issue; step 4 is the
+follow-up PR.</p>
+
+</div>
+</body>
+</html>

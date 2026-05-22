@@ -60,8 +60,7 @@ for capture. The full descriptor dump is in
   </tbody>
 </table>
 <p>The raw GUID bytes in the descriptor are
-<code>91 72 1e 9a 43 68 83 46 6d 92 39 bc 79 06 ee 49</code> &mdash;
-Microsoft encoding (first three fields little-endian, last eight bytes
+<code>91 72 1e 9a 43 68 83 46 6d 92 39 bc 79 06 ee 49</code> - Microsoft encoding (first three fields little-endian, last eight bytes
 big-endian), which is what the UVC class expects when matching the XU.</p>
 
 <h2>Control-surface split</h2>
@@ -77,28 +76,28 @@ of OBSBOT's <code>libdev.so</code> driving the device:</p>
     <tr>
       <td>Standard UVC <code>CameraTerminal</code></td>
       <td class="num">1</td>
-      <td>zoom, pan/tilt, focus, exposure, roll &mdash; UVC 1.5 §A.9.4 selectors</td>
+      <td>zoom, pan/tilt, focus, exposure, roll - UVC 1.5 §A.9.4 selectors</td>
     </tr>
     <tr>
       <td>Standard UVC <code>ProcessingUnit</code></td>
       <td class="num">3</td>
-      <td>brightness, contrast, saturation, hue, sharpness, gain, WB temp + auto &mdash; UVC 1.5 §A.9.5 selectors</td>
+      <td>brightness, contrast, saturation, hue, sharpness, gain, WB temp + auto - UVC 1.5 §A.9.5 selectors</td>
     </tr>
     <tr>
       <td>OBSBOT vendor extension</td>
       <td class="num">2</td>
-      <td>mediaMode, HDR/WDR, FOV preset, face AE/focus, AI tracking, status &mdash; all proprietary</td>
+      <td>mediaMode, HDR/WDR, FOV preset, face AE/focus, AI tracking, status - all proprietary</td>
     </tr>
   </tbody>
 </table>
 <p>Standard UVC paths do not require per-method <code>.pcapng</code> files
-&mdash; UVC 1.5 §A.9 is the source. OBSBOT XU paths do.</p>
+ - UVC 1.5 §A.9 is the source. OBSBOT XU paths do.</p>
 
 <h2>OBSBOT XU framing</h2>
 <p>Two distinct payload styles are visible on the XU during the first
 capture.</p>
 
-<h3>Selector 0x06 &mdash; single-byte mode register</h3>
+<h3>Selector 0x06 - single-byte mode register</h3>
 <p>Four consecutive <code>SET</code>s with payload
 <code>&lt;value&gt; 0x01 0x00&times;58</code> map 1:1 to four enum
 setters in the CLI's source order:</p>
@@ -121,7 +120,7 @@ echoed through the preceding selector-0x02 RPC frame, not from selector
 0x06 alone. Targeted single-control captures will confirm or refute
 this.</p>
 
-<h3>Selector 0x02 &mdash; RPC-framed channel</h3>
+<h3>Selector 0x02 - RPC-framed channel</h3>
 <p><code>SET_CUR</code> and <code>GET_CUR</code> always with
 <code>wLength = 60</code>. Payload has a recurring header:</p>
 <pre><code>offset 0:    0xAA              magic
@@ -147,7 +146,7 @@ padded to 60 bytes with 0x00</code></pre>
       <code>usb.device_address == &lt;dev&gt;</code>.</li>
   <li>Run an OBSBOT GUI/CLI built against
       <code>libdev.so</code>.</li>
-  <li>Manipulate <strong>only</strong> the control under test &mdash; e.g.
+  <li>Manipulate <strong>only</strong> the control under test - e.g.
       slide brightness to min, mid, max in sequence.</li>
   <li>Stop the capture, save it under
       <code>doc/protocol/meet2/</code> as
