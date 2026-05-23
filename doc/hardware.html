@@ -62,7 +62,7 @@ See <a href="protocol.html">protocol notes</a>.</p>
   </thead>
   <tbody>
     <tr>
-      <td>brightness, contrast, saturation</td>
+      <td>brightness, contrast, saturation, hue, sharpness, gain, backlight compensation</td>
       <td>standard UVC <code>ProcessingUnit</code></td>
       <td class="ok">working end-to-end</td>
       <td>UVC 1.5 &sect;A.9.5 (no per-method pcap required)</td>
@@ -70,14 +70,38 @@ See <a href="protocol.html">protocol notes</a>.</p>
     <tr>
       <td>WB temperature, WB auto</td>
       <td>standard UVC <code>ProcessingUnit</code></td>
-      <td class="ok">wired</td>
+      <td class="ok">working end-to-end</td>
       <td>UVC 1.5 &sect;A.9.5</td>
+    </tr>
+    <tr>
+      <td>anti-flicker (mains-frequency rejection)</td>
+      <td>standard UVC <code>ProcessingUnit</code> (Power Line Frequency)</td>
+      <td class="ok">working end-to-end</td>
+      <td>UVC 1.5 &sect;4.2.2.3.6</td>
     </tr>
     <tr>
       <td>zoom, focus, pan/tilt</td>
       <td>standard UVC <code>CameraTerminal</code></td>
       <td class="ok">working end-to-end (pan/tilt centred against live camera)</td>
       <td>UVC 1.5 &sect;A.9.4</td>
+    </tr>
+    <tr>
+      <td>autofocus on/off</td>
+      <td>standard UVC <code>CameraTerminal</code> (Focus Auto)</td>
+      <td class="ok">working end-to-end</td>
+      <td>UVC 1.5 &sect;4.2.2.1.8</td>
+    </tr>
+    <tr>
+      <td>auto-exposure mode + AE lock</td>
+      <td>standard UVC <code>CameraTerminal</code> (AE Mode)</td>
+      <td class="ok">working end-to-end (Manual / Auto verified; Shutter / Aperture Priority accepted but Meet 2-dependent)</td>
+      <td>UVC 1.5 &sect;4.2.2.1.2</td>
+    </tr>
+    <tr>
+      <td>manual exposure time</td>
+      <td>standard UVC <code>CameraTerminal</code> (Exposure Time Absolute)</td>
+      <td class="ok">working end-to-end (paired with AE lock for full manual control)</td>
+      <td>UVC 1.5 &sect;4.2.2.1.4</td>
     </tr>
     <tr>
       <td>HDR (WDR)</td>
@@ -159,8 +183,26 @@ See <a href="protocol.html">protocol notes</a>.</p>
     </tr>
     <tr>
       <td>audio AGC</td>
-      <td>standard USB Audio Class</td>
-      <td class="pending">stub only</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x17</code></td>
+      <td class="ok">set decoded + verified; no getter (camera doesn't echo state into the status blob, and the SDK's get path uses a separate RPC we haven't captured)</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setAudioAgc.md">setAudioAgc.md</a></td>
+    </tr>
+    <tr>
+      <td>firmware version (read)</td>
+      <td>XU selector <code>0x02</code> RPC (<code>cmd 0x08 / 0x04</code>)</td>
+      <td class="ok"><code>Device::firmware</code> returns a parsed <code>FirmwareVersion</code> with Ord support</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/firmwareUpgrade.md">firmwareUpgrade.md</a></td>
+    </tr>
+    <tr>
+      <td>firmware upgrade (write)</td>
+      <td>XU selector <code>0x02</code> RPC + bulk transport (TBD)</td>
+      <td class="pending">requires a pcap of the SDK upgrading a Meet 2 + a firmware binary; scoped in <a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/firmwareUpgrade.md">firmwareUpgrade.md</a></td>
+      <td> - </td>
+    </tr>
+    <tr>
+      <td>mirror / flip</td>
+      <td>XU selector <code>0x02</code> RPC (libdev magic <code>0x29000b00010000</code>)</td>
+      <td class="pending">SDK symbol identified; wire format pending a targeted pcap</td>
       <td> - </td>
     </tr>
   </tbody>

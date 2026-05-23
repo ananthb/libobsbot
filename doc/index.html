@@ -81,17 +81,23 @@ See the <a href="hardware.html">hardware-support matrix</a> and
 <ul>
   <li>One camera: <strong>OBSBOT Meet 2</strong></li>
   <li>One transport: UVC class-specific control transfers</li>
-  <li>~30 methods covering the controls a useful GUI needs (PTZ, zoom,
-      focus, brightness/contrast/saturation, white balance, HDR, FOV,
-      face AE/focus, AI auto-framing, media mode) plus hot-plug + status
-      events. Audio AGC is stubbed.</li>
-  <li>Three platforms: Linux, macOS, Windows (with caveats - see
-      below)</li>
+  <li>~40 methods covering PTZ, zoom, focus + autofocus, AE mode + lock
+      + manual exposure time, brightness / contrast / saturation / hue /
+      sharpness / gain / backlight compensation, anti-flicker, white
+      balance (auto + Kelvin), HDR, FOV, face AE, face focus, AI
+      auto-framing, media mode, audio AGC, plus hot-plug events and
+      a per-device status poller. Firmware version is readable and
+      parsed; the firmware-upgrade write path is documented out of
+      scope until a capture lands (see
+      <a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/firmwareUpgrade.md">firmwareUpgrade.md</a>).</li>
+  <li>Two platforms working today: Linux + macOS. Windows still
+      planned.</li>
 </ul>
 
-<p>The other ~225 SDK methods (firmware update, file transfer,
-network/WiFi, Bluetooth, NDI/RTSP, gimbal presets, AI gesture, exposure
-modes) are out of scope for v1.</p>
+<p>The other ~200 SDK methods (file transfer, network / WiFi,
+Bluetooth, NDI / RTSP, gimbal presets, AI gesture, scheduling,
+watermark, tally light, SD card) are Tail Air / Tiny features and
+out of scope for v1.</p>
 
 <h2>Platforms</h2>
 <table>

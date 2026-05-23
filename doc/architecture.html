@@ -99,7 +99,7 @@ device is enough.</p>
       control is captured and decoded. The CRC, MAC handshake, and
       mode-register status blob are already in place; remaining
       additions are mostly per-method captures of advanced controls
-      (AE-lock, MAE-ISO, audio AGC, ...).</li>
+      (MAE-ISO, mirror / flip, firmware-upgrade trigger, ...).</li>
   <li><code>src/transport/usb.rs</code> (Linux) and
       <code>src/transport/macos.rs</code> (macOS) ship today. A
       Windows (WinUSB) transport is planned. See
