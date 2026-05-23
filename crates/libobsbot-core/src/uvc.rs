@@ -27,8 +27,19 @@ pub(crate) mod pu {
     pub(crate) const BRIGHTNESS: u8 = 0x02;
     /// `PU_CONTRAST_CONTROL`; u16 LE, 2 bytes.
     pub(crate) const CONTRAST: u8 = 0x03;
+    /// `PU_HUE_CONTROL`; i16 LE, 2 bytes.
+    pub(crate) const HUE: u8 = 0x06;
     /// `PU_SATURATION_CONTROL`; u16 LE, 2 bytes.
     pub(crate) const SATURATION: u8 = 0x07;
+    /// `PU_SHARPNESS_CONTROL`; u16 LE, 2 bytes.
+    pub(crate) const SHARPNESS: u8 = 0x08;
+    /// `PU_BACKLIGHT_COMPENSATION_CONTROL`; u16 LE, 2 bytes.
+    pub(crate) const BACKLIGHT_COMPENSATION: u8 = 0x09;
+    /// `PU_GAIN_CONTROL`; u16 LE, 2 bytes.
+    pub(crate) const GAIN: u8 = 0x04;
+    /// `PU_POWER_LINE_FREQUENCY_CONTROL`; u8, 1 byte
+    /// (0 = Disabled, 1 = 50 Hz, 2 = 60 Hz, 3 = Auto).
+    pub(crate) const POWER_LINE_FREQUENCY: u8 = 0x05;
     /// `PU_WHITE_BALANCE_TEMPERATURE_CONTROL`; u16 LE Kelvin, 2 bytes.
     pub(crate) const WHITE_BALANCE_TEMPERATURE: u8 = 0x0a;
     /// `PU_WHITE_BALANCE_TEMPERATURE_AUTO_CONTROL`; bool, 1 byte.

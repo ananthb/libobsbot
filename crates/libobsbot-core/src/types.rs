@@ -20,6 +20,20 @@ pub enum FovType {
     Narrow,
 }
 
+/// Mains frequency for the anti-flicker algorithm. Maps onto the UVC
+/// `PU_POWER_LINE_FREQUENCY_CONTROL` value byte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AntiFlicker {
+    /// No flicker compensation.
+    Off,
+    /// 50 Hz mains (Europe, most of Asia, Australia).
+    Hz50,
+    /// 60 Hz mains (North America, parts of Asia).
+    Hz60,
+    /// Camera picks based on ambient light analysis.
+    Auto,
+}
+
 /// HDR / wide-dynamic-range mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WdrMode {

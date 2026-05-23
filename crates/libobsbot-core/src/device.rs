@@ -17,8 +17,8 @@ use crate::discovery::DeviceInfo;
 use crate::status::{Event, EventSender};
 use crate::transport::Transport;
 use crate::types::{
-    AiMode, AutoFramingMode, Cadence, FovType, MediaMode, ProductType, Status, WdrMode,
-    WhiteBalanceMode,
+    AiMode, AntiFlicker, AutoFramingMode, Cadence, FovType, MediaMode, ProductType, Status,
+    WdrMode, WhiteBalanceMode,
 };
 use crate::uvc::{self, UvcGet};
 use crate::{Error, Result};
@@ -350,6 +350,116 @@ impl Device {
         let lo = self.pu_get_u16(UvcGet::Min, uvc::pu::SATURATION)?;
         let hi = self.pu_get_u16(UvcGet::Max, uvc::pu::SATURATION)?;
         Ok(i32::from(lo)..=i32::from(hi))
+    }
+
+    /// Set image hue. `PU_HUE_CONTROL`, i16 LE (UVC 1.5 §4.2.2.3.4).
+    pub fn set_hue(&self, value: i32) -> Result<()> {
+        let v = i16::try_from(value).map_err(|_| Error::OutOfRange)?;
+        self.transport
+            .uvc_set(uvc::PROCESSING_UNIT, uvc::pu::HUE, &v.to_le_bytes())
+    }
+
+    /// Read current hue.
+    pub fn hue(&self) -> Result<i32> {
+        Ok(i32::from(self.pu_get_i16(UvcGet::Cur, uvc::pu::HUE)?))
+    }
+
+    /// Reported hue range.
+    pub fn hue_range(&self) -> Result<RangeInclusive<i32>> {
+        let lo = self.pu_get_i16(UvcGet::Min, uvc::pu::HUE)?;
+        let hi = self.pu_get_i16(UvcGet::Max, uvc::pu::HUE)?;
+        Ok(i32::from(lo)..=i32::from(hi))
+    }
+
+    /// Set image sharpness. `PU_SHARPNESS_CONTROL`, u16 LE.
+    pub fn set_sharpness(&self, value: i32) -> Result<()> {
+        let v = u16::try_from(value).map_err(|_| Error::OutOfRange)?;
+        self.transport
+            .uvc_set(uvc::PROCESSING_UNIT, uvc::pu::SHARPNESS, &v.to_le_bytes())
+    }
+
+    /// Read current sharpness.
+    pub fn sharpness(&self) -> Result<i32> {
+        Ok(i32::from(self.pu_get_u16(UvcGet::Cur, uvc::pu::SHARPNESS)?))
+    }
+
+    /// Reported sharpness range.
+    pub fn sharpness_range(&self) -> Result<RangeInclusive<i32>> {
+        let lo = self.pu_get_u16(UvcGet::Min, uvc::pu::SHARPNESS)?;
+        let hi = self.pu_get_u16(UvcGet::Max, uvc::pu::SHARPNESS)?;
+        Ok(i32::from(lo)..=i32::from(hi))
+    }
+
+    /// Set sensor gain. `PU_GAIN_CONTROL`, u16 LE.
+    pub fn set_gain(&self, value: i32) -> Result<()> {
+        let v = u16::try_from(value).map_err(|_| Error::OutOfRange)?;
+        self.transport
+            .uvc_set(uvc::PROCESSING_UNIT, uvc::pu::GAIN, &v.to_le_bytes())
+    }
+
+    /// Read current gain.
+    pub fn gain(&self) -> Result<i32> {
+        Ok(i32::from(self.pu_get_u16(UvcGet::Cur, uvc::pu::GAIN)?))
+    }
+
+    /// Reported gain range.
+    pub fn gain_range(&self) -> Result<RangeInclusive<i32>> {
+        let lo = self.pu_get_u16(UvcGet::Min, uvc::pu::GAIN)?;
+        let hi = self.pu_get_u16(UvcGet::Max, uvc::pu::GAIN)?;
+        Ok(i32::from(lo)..=i32::from(hi))
+    }
+
+    /// Set backlight-compensation. `PU_BACKLIGHT_COMPENSATION_CONTROL`,
+    /// u16 LE (UVC 1.5 §4.2.2.3.16). 0 disables it.
+    pub fn set_backlight_compensation(&self, value: i32) -> Result<()> {
+        let v = u16::try_from(value).map_err(|_| Error::OutOfRange)?;
+        self.transport.uvc_set(
+            uvc::PROCESSING_UNIT,
+            uvc::pu::BACKLIGHT_COMPENSATION,
+            &v.to_le_bytes(),
+        )
+    }
+
+    /// Read current backlight-compensation value.
+    pub fn backlight_compensation(&self) -> Result<i32> {
+        Ok(i32::from(self.pu_get_u16(
+            UvcGet::Cur,
+            uvc::pu::BACKLIGHT_COMPENSATION,
+        )?))
+    }
+
+    /// Set anti-flicker (mains-frequency rejection).
+    /// `PU_POWER_LINE_FREQUENCY_CONTROL`, u8 (UVC 1.5 §4.2.2.3.6).
+    pub fn set_anti_flicker(&self, mode: AntiFlicker) -> Result<()> {
+        let v: u8 = match mode {
+            AntiFlicker::Off => 0,
+            AntiFlicker::Hz50 => 1,
+            AntiFlicker::Hz60 => 2,
+            AntiFlicker::Auto => 3,
+        };
+        self.transport
+            .uvc_set(uvc::PROCESSING_UNIT, uvc::pu::POWER_LINE_FREQUENCY, &[v])
+    }
+
+    /// Read current anti-flicker mode.
+    pub fn anti_flicker(&self) -> Result<AntiFlicker> {
+        let mut buf = [0u8; 1];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            uvc::PROCESSING_UNIT,
+            uvc::pu::POWER_LINE_FREQUENCY,
+            &mut buf,
+        )?;
+        match buf[0] {
+            0 => Ok(AntiFlicker::Off),
+            1 => Ok(AntiFlicker::Hz50),
+            2 => Ok(AntiFlicker::Hz60),
+            3 => Ok(AntiFlicker::Auto),
+            other => Err(Error::BadResponse {
+                selector: uvc::pu::POWER_LINE_FREQUENCY,
+                bytes: vec![other],
+            }),
+        }
     }
 
     // ---- White balance: hybrid (PU temperature, XU presets) -----------------
@@ -856,6 +966,55 @@ mod tests {
             d.set_brightness(i32::from(i16::MAX) + 1),
             Err(Error::OutOfRange)
         ));
+    }
+
+    #[test]
+    fn hue_sharpness_gain_backlight_route_to_pu_with_correct_selectors_and_widths() {
+        let (d, mock) = device_with_mock();
+
+        d.set_hue(-30).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, uvc::PROCESSING_UNIT);
+        assert_eq!(sel, uvc::pu::HUE);
+        assert_eq!(payload, (-30_i16).to_le_bytes().to_vec());
+
+        d.set_sharpness(7).unwrap();
+        let (_, sel, payload) = last_set(&mock);
+        assert_eq!(sel, uvc::pu::SHARPNESS);
+        assert_eq!(payload, 7_u16.to_le_bytes().to_vec());
+
+        d.set_gain(42).unwrap();
+        let (_, sel, payload) = last_set(&mock);
+        assert_eq!(sel, uvc::pu::GAIN);
+        assert_eq!(payload, 42_u16.to_le_bytes().to_vec());
+
+        d.set_backlight_compensation(1).unwrap();
+        let (_, sel, payload) = last_set(&mock);
+        assert_eq!(sel, uvc::pu::BACKLIGHT_COMPENSATION);
+        assert_eq!(payload, 1_u16.to_le_bytes().to_vec());
+    }
+
+    #[test]
+    fn anti_flicker_encodes_each_mode() {
+        let (d, mock) = device_with_mock();
+        for (mode, byte) in [
+            (AntiFlicker::Off, 0),
+            (AntiFlicker::Hz50, 1),
+            (AntiFlicker::Hz60, 2),
+            (AntiFlicker::Auto, 3),
+        ] {
+            d.set_anti_flicker(mode).unwrap();
+            let (entity, sel, payload) = last_set(&mock);
+            assert_eq!(entity, uvc::PROCESSING_UNIT);
+            assert_eq!(sel, uvc::pu::POWER_LINE_FREQUENCY);
+            assert_eq!(payload, vec![byte], "wrong byte for {mode:?}");
+        }
+    }
+
+    #[test]
+    fn hue_rejects_out_of_i16_range() {
+        let (d, _) = device_with_mock();
+        assert!(matches!(d.set_hue(i32::MAX), Err(Error::OutOfRange)));
     }
 
     #[test]
