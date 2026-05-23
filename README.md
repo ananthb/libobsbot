@@ -6,9 +6,12 @@ traffic and ships a stable C ABI so the same library can drive PTZ, image
 controls, white balance, HDR, FOV, face AE/focus, AI auto-framing, and audio
 controls from any GPL-compatible application.
 
-**Status:** v0.0.0 - pre-release. The protocol capture phase is underway.
-Today the workspace skeleton compiles and the standard UVC routing layer
-is in place. Full docs at <https://ananthb.github.io/libobsbot/>.
+**Status:** v0.0.0 - pre-release. The Meet 2 protocol is decoded -
+including the selector-0x02 RPC CRC - and the synchronous control
+surface works end-to-end against real hardware. A per-device status
+poller and a hot-plug watcher feed the same event channel; the C ABI
+mirrors the Rust surface. Full docs at
+<https://ananthb.github.io/libobsbot/>.
 
 > **Have an OBSBOT camera we don't yet support?** The fastest way to
 > add it is a USB packet capture. See the

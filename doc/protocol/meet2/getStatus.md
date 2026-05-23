@@ -21,32 +21,32 @@ payload (zero-padded). Layout, with the direction marker bytes 8-9
 flipped between request and reply:
 
 ```
-offset 0:    0xAA               magic
-offset 1:    seq                fixed per session (0x01 for requests,
-                                0x29 for replies in this capture)
-offset 2:    sub-seq            increments per (request, reply) pair
-offset 3:    0x00               reserved
-offset 4-5:  0x0C 0x00          unknown small constant (12 LE);
-                                doesn't track payload length
-offset 6-7:  CRC                varies per frame, algorithm not yet
-                                cracked - same bytes repeat across
-                                identical content + sub-seq combos
-                                so it's a real checksum, not a tag
-offset 8:    direction byte 0   0x0A in requests, 0x0D in replies
-offset 9:    direction byte 1   0x0D in requests, 0x0A in replies
-                                (cmd_set in this capture is 0x0D;
-                                whether the direction byte 0x0A is a
-                                second marker or part of a swapped
-                                little-endian pair is open)
-offset 10:   cmd_id             function selector within cmd_set
-offset 11:   sub-cmd-id         sub-function under cmd_id
-offset 12-13:                   payload length (u16 LE) of data at
-                                offset 16+
-offset 14-15:                   two bytes that change per reply -
-                                possibly a payload-content checksum
-                                or a status / type tag. Unknown.
-offset 16..  payload data       interpretation depends on
-                                (cmd_id, sub-cmd-id)
+offset 0:     0xAA               magic
+offset 1:     seq                fixed per session (0x01 for requests,
+                                 0x29 for replies in this capture);
+                                 bits 5-6 of this byte gate the inner
+                                 CRC at [14,15]
+offset 2:     sub-seq            increments per (request, reply) pair
+offset 3:     0x00               reserved
+offset 4-5:   0x0C 0x00          outer length (12, u16 LE) - the CRC
+                                 below covers exactly this many bytes
+offset 6-7:   outer CRC          CRC-16/USB over buf[0..outer_len] with
+                                 this field zeroed. Algorithm recovered
+                                 from a libdev.so disassembly - see
+                                 crc-investigation.md
+offset 8:     direction marker   0x0A in requests, 0x0D in replies
+offset 9:     cmd_set            family selector
+offset 10:    cmd_id             function within cmd_set
+offset 11:    sub-cmd-id         sub-function under cmd_id
+offset 12-13: inner length       payload bytes at offset 16+ (u16 LE)
+offset 14-15: inner CRC          CRC-16/USB over
+                                 buf[12..16+inner_len] with this field
+                                 zeroed; only present when bit 5 or 6
+                                 of seq is set (requests like
+                                 face-focus use it; the firmware /
+                                 serial requests don't and leave it 0)
+offset 16..   payload data       interpretation depends on
+                                 (cmd_id, sub-cmd-id)
 padded to 60 bytes with 0x00.
 ```
 
@@ -119,8 +119,9 @@ This is the serial-number read.
 
 ## Decode mapping into our `Status` type
 
-What we can implement today, given the framing is understood for reads
-even though the CRC isn't yet cracked for writes:
+With the CRC also cracked (see [`crc-investigation.md`](crc-investigation.md))
+these reply formats are what `Device::status` and friends decode after
+synthesising the matching request frames at runtime:
 
 | Field                | Source                                      | Format                                |
 |----------------------|---------------------------------------------|---------------------------------------|
@@ -138,28 +139,13 @@ capture is the next pcap to add.
 
 ## What's still open
 
-- **CRC at offset 6-7.** Two bytes that change per frame. The same
-  request bytes always produce the same CRC, so it's deterministic.
-  Brute-forcing common CRC16 variants (CCITT-FALSE, MODBUS, XMODEM,
-  ARC, ...) against the four known (header, CRC) pairs below is the
-  next analytical step.
-
-  ```
-  aa 01 00 00 0c 00 ?? ?? 0a 0d 08 18 00 ...  ->  CRC = 91 5c
-  aa 01 01 00 0c 00 ?? ?? 0a 0d 08 04 00 ... ad b6 1b 98 dc 8d 00 ...  ->  CRC = c1 50
-  aa 01 02 00 0c 00 ?? ?? 0a 0d 48 19 00 ... ad b6 1b 98 dc 8d 00 ...  ->  CRC = c0 96
-  aa 01 03 00 0c 00 ?? ?? 0a 0d c8 18 00 ... 00 ad b6 1b 98 dc 8d 01 01 ...  ->  CRC = 31 53
-  ```
-
-  Without a working CRC, libobsbot can only READ via the RPC channel
-  (replies don't need us to compute the CRC, only validate it); we
-  can't yet issue our own RPC writes there.
-
-- **Bytes 14-15 of every reply.** Look CRC-like but cover a smaller
-  range; possibly per-payload checksum or a status code.
+- **The handshake's remaining info bytes.** Pair 2's 34-byte reply
+  carries the firmware at offset 20-23, but the other 30 bytes (capability
+  bits? model info? available-mode masks?) aren't decoded. Nothing
+  load-bearing depends on them.
 
 - **Selector 0x06 vs selector 0x02 routing inside libdev.so.** Most
   proprietary controls land on the simpler 0x06 mode register
   (`setWdr.md` and siblings). A few - face_focus, status poll, the
   whole handshake - go through 0x02. The criterion is not yet
-  documented.
+  documented but doesn't gate any public API: we hand-pick per-method.

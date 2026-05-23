@@ -55,9 +55,11 @@ balance, HDR, FOV, face AE/focus, AI auto-framing, and audio controls
 from any GPL-compatible application.</p>
 
 <p><strong>Status:</strong> v0.0.0 - pre-release. The
-<a href="protocol.html">protocol capture phase</a> is underway. Today
-the workspace skeleton compiles, the standard UVC routing layer is in
-place, and the audit-trail format is established.</p>
+<a href="protocol.html">protocol</a> is decoded for the Meet 2,
+including the selector-0x02 RPC CRC. Synchronous setters and getters
+work end-to-end against real hardware; a per-device status poller and
+a hot-plug watcher feed the same event channel; the C ABI exposes the
+full surface.</p>
 
 <nav>
   <a href="hardware.html">Hardware support</a>
@@ -81,8 +83,8 @@ See the <a href="hardware.html">hardware-support matrix</a> and
   <li>One transport: UVC class-specific control transfers</li>
   <li>~30 methods covering the controls a useful GUI needs (PTZ, zoom,
       focus, brightness/contrast/saturation, white balance, HDR, FOV,
-      face AE/focus, AI auto-framing, audio AGC) plus hot-plug + status
-      events</li>
+      face AE/focus, AI auto-framing, media mode) plus hot-plug + status
+      events. Audio AGC is stubbed.</li>
   <li>Three platforms: Linux, macOS, Windows (with caveats - see
       below)</li>
 </ul>

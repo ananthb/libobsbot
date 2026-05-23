@@ -63,21 +63,27 @@ Filter: `usb.setup.wIndex == 0x0200`. Two selectors seen during this run:
 header:
 
 ```
-offset 0:    0xAA              magic
-offset 1:    seq               monotonically rising per session
-offset 2:    sub-seq           per-message in a session
-offset 3:    0x00              reserved
-offset 4–5:  0x0C 0x00         small constant (12, LE - payload length?)
-offset 6–7:  varies            looks like a CRC16
-offset 8:    0x0A              second magic
-offset 9:    cmd_set
-offset 10:   cmd_id
-offset 11..  payload
+offset 0:     0xAA              magic
+offset 1:     seq               low 10 bits forced to 0x1AA by libdev;
+                                bits 5-6 toggle the inner CRC below
+offset 2:     sub-seq           per-message in a session
+offset 3:     0x00              reserved
+offset 4-5:   0x0C 0x00         outer length (12, u16 LE)
+offset 6-7:   outer CRC         CRC-16/USB over buf[0..outer_len], see
+                                crc-investigation.md
+offset 8:     0x0A              request direction marker
+offset 9:     cmd_set
+offset 10:    cmd_id
+offset 11:    sub_cmd_id
+offset 12-13: inner length      payload byte count, u16 LE
+offset 14-15: inner CRC         CRC-16/USB over buf[12..16+inner_len]
+                                when (seq & 0x60) != 0; zero otherwise
+offset 16..   payload
 padded to 60 bytes with 0x00
 ```
 
 Frame 728 is the only `SET` on this selector during the apply phase; the
-rest are device-info handshake (frames 190–274). Decoding individual
+rest are device-info handshake (frames 190-274). Decoding individual
 `(cmd_set, cmd_id)` pairs needs targeted captures.
 
 ### Selector 0x06 - single-byte mode register

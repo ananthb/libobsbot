@@ -95,13 +95,14 @@ device is enough.</p>
 
 <h2>Where to expect change</h2>
 <ul>
-  <li><code>src/devices/meet2.rs</code> grows the OBSBOT-XU
-      <code>(selector, encode, decode)</code> table over M3 &ndash; M6.
-      Every entry references a pcap.</li>
-  <li><code>src/transport/usb.rs</code> picks up the Linux
-      <code>uvcvideo</code> coexistence path
-      (<code>UVCIOC_CTRL_QUERY</code> via <code>/dev/videoN</code>) so
-      control transfers can land while Zoom/OBS/Cheese is streaming.</li>
+  <li><code>src/devices/meet2.rs</code> grows whenever a new XU
+      control is captured and decoded. The CRC, MAC handshake, and
+      mode-register status blob are already in place; remaining
+      additions are mostly per-method captures of advanced controls
+      (AE-lock, MAE-ISO, audio AGC, ...).</li>
+  <li><code>src/transport/usb.rs</code> is Linux-only today. macOS
+      (IOKit) and Windows (WinUSB) transports are planned as
+      additional <code>Transport</code> impls.</li>
   <li><code>src/discovery.rs</code> currently polls
       <code>/sys/class/video4linux</code> every 2 s to detect
       add/remove. macOS / Windows transports (and possibly a switch

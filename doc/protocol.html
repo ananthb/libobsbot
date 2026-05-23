@@ -97,43 +97,63 @@ of OBSBOT's <code>libdev.so</code> driving the device:</p>
 <p>Two distinct payload styles are visible on the XU during the first
 capture.</p>
 
-<h3>Selector 0x06 - single-byte mode register</h3>
-<p>Four consecutive <code>SET</code>s with payload
-<code>&lt;value&gt; 0x01 0x00&times;58</code> map 1:1 to four enum
-setters in the CLI's source order:</p>
+<h3>Selector 0x06 - mode register</h3>
+<p><code>SET_CUR</code> writes a 60-byte payload
+<code>[control_id, value_size, value..., 0&times;padding]</code>. The
+control id selects which OBSBOT-proprietary setting to update; per-method
+captures under <code>doc/protocol/meet2/</code> pin the wire bytes for
+each.</p>
 <table>
   <thead>
-    <tr><th>First byte</th><th>API call</th></tr>
+    <tr><th>Control id</th><th>Method</th><th>Value size</th></tr>
   </thead>
   <tbody>
-    <tr><td><code>0x00</code></td><td><code>cameraSetMediaModeU(0)</code> (Normal)</td></tr>
-    <tr><td><code>0x01</code></td><td><code>cameraSetWdrR(1)</code> (HDR off)</td></tr>
-    <tr><td><code>0x04</code></td><td><code>cameraSetFovU(4)</code> (Wide)</td></tr>
-    <tr><td><code>0x03</code></td><td><code>cameraSetFaceAER(3)</code> (off)</td></tr>
+    <tr><td><code>0x00</code></td><td>media mode</td><td>1 byte (Normal=0, Background=1, AutoFrame=2)</td></tr>
+    <tr><td><code>0x01</code></td><td>WDR / HDR</td><td>1 byte (off=0, Dol2To1=1)</td></tr>
+    <tr><td><code>0x03</code></td><td>face AE</td><td>1 byte (off=0, on=1)</td></tr>
+    <tr><td><code>0x04</code></td><td>FOV preset</td><td>1 byte (Wide=0, Medium=1, Narrow=2)</td></tr>
+    <tr><td><code>0x0d</code></td><td>auto-framing sub-mode</td><td>2 bytes <code>[group_single, close_upper]</code></td></tr>
+    <tr><td><code>0x16</code></td><td>AI master mode</td><td>2 bytes u16 LE (None=0, Group=1, Human=2, Hand=3, WhiteBoard=4, Desk=5)</td></tr>
   </tbody>
 </table>
-<p>The selector is the same for four different controls. The trailing
-<code>0x01</code> is constant.
-<strong>Inference, not confirmation:</strong> the camera likely
-distinguishes controls by a <code>cmd_set</code> / <code>cmd_id</code>
-echoed through the preceding selector-0x02 RPC frame, not from selector
-0x06 alone. Targeted single-control captures will confirm or refute
-this.</p>
+<p><code>GET_CUR</code> on the same selector returns a 60-byte
+<strong>status blob</strong> with a fixed marker byte (<code>0x27</code>
+on firmware 4.4.6.1) and live readback of WDR (offset <code>0x06</code>),
+face-AE (offset <code>0x07</code>), and AI / auto-framing / media mode
+(offset <code>0x18</code>, shared because the camera collapses those
+three settings into a single internal enum). The full offset table is in
+<a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/statusBlob.md"><code>statusBlob.md</code></a>.</p>
 
 <h3>Selector 0x02 - RPC-framed channel</h3>
 <p><code>SET_CUR</code> and <code>GET_CUR</code> always with
 <code>wLength = 60</code>. Payload has a recurring header:</p>
-<pre><code>offset 0:    0xAA              magic
-offset 1:    seq               monotonically rising per session
-offset 2:    sub-seq           per-message in a session
-offset 3:    0x00              reserved
-offset 4-5:  0x0C 0x00         small constant (12, LE - payload length?)
-offset 6-7:  varies            looks like a CRC16
-offset 8:    0x0A              second magic
-offset 9:    cmd_set
-offset 10:   cmd_id
-offset 11..  payload
+<pre><code>offset 0:     0xAA              magic
+offset 1:     seq               low 10 bits forced to 0x1AA by libdev;
+                                bits 5-6 toggle the inner CRC below
+offset 2:     sub-seq           per-message in a session
+offset 3:     0x00              reserved
+offset 4-5:   0x0C 0x00         outer length (12, u16 LE) - the CRC
+                                below covers exactly this many bytes
+offset 6-7:   outer CRC         CRC-16/USB over buf[0..outer_len] with
+                                this field zeroed; recovered from a
+                                libdev.so disassembly, see
+                                crc-investigation.md
+offset 8:     0x0A              request direction marker
+offset 9:     cmd_set
+offset 10:    cmd_id
+offset 11:    sub_cmd_id
+offset 12-13: inner length      payload byte count, u16 LE
+offset 14-15: inner CRC         CRC-16/USB over buf[12..16+inner_len]
+                                with this field zeroed; only present
+                                when (seq &amp; 0x60) != 0
+offset 16..   payload
 padded to 60 bytes with 0x00</code></pre>
+<p>The recovered CRC algorithm lets libobsbot synthesise arbitrary RPC
+frames at runtime. The remaining device-specific input is the 6-byte
+MAC tail the camera embeds in some command payloads; it's learned
+once at <code>Devices::open</code> via the
+<code>(cmd_set 0x0D, cmd_id 0x08, sub-cmd 0x18)</code> handshake (the
+one RPC frame that doesn't itself need a MAC).</p>
 
 <h2>Capture procedure</h2>
 <ol>

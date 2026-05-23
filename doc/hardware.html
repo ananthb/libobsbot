@@ -105,39 +105,63 @@ See <a href="protocol.html">protocol notes</a>.</p>
     </tr>
     <tr>
       <td>face focus</td>
-      <td>XU selector <code>0x02</code> RPC frame</td>
-      <td class="pending">captured, format pending</td>
+      <td>XU selector <code>0x02</code> RPC frame (<code>cmd_set 0x02</code>, <code>cmd_id 0x36</code>)</td>
+      <td class="ok">set decoded + verified; frame synthesised at runtime via CRC-16/USB</td>
       <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setFaceFocus.md">setFaceFocus.md</a></td>
     </tr>
     <tr>
       <td>auto-framing sub-mode</td>
-      <td>XU (selector pending)</td>
-      <td class="pending">no capture yet</td>
-      <td> - </td>
+      <td>XU selector <code>0x06</code>, control id <code>0x0d</code></td>
+      <td class="ok">decoded + verified on hardware</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setAutoFraming.md">setAutoFraming.md</a></td>
     </tr>
     <tr>
-      <td>AI master mode, AI auto-zoom, track speed</td>
-      <td>XU (selector pending)</td>
-      <td class="pending">no capture yet</td>
-      <td> - </td>
+      <td>AI master mode</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x16</code></td>
+      <td class="ok">decoded + verified on hardware (set + get via status blob offset 0x18)</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setAiMode.md">setAiMode.md</a></td>
+    </tr>
+    <tr>
+      <td>XU status blob (WDR, face-AE, AI mode readback)</td>
+      <td>XU selector <code>0x06</code> <code>GET_CUR</code></td>
+      <td class="ok">decoded by toggle-and-diff against live hardware</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/statusBlob.md">statusBlob.md</a></td>
+    </tr>
+    <tr>
+      <td>firmware / serial read</td>
+      <td>XU selector <code>0x02</code> RPC frame</td>
+      <td class="ok">decoded; frames synthesised at runtime from learned device MAC</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/getStatus.md">getStatus.md</a></td>
+    </tr>
+    <tr>
+      <td>selector-0x02 RPC framing (CRC)</td>
+      <td>XU selector <code>0x02</code></td>
+      <td class="ok">CRC-16/USB over <code>buf[0..u16_le(buf[4..6])]</code>, plus an inner CRC over the payload section when <code>buf[1] &amp; 0x60 != 0</code>; recovered from <code>libdev.so</code> disassembly</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/crc-investigation.md">crc-investigation.md</a></td>
+    </tr>
+    <tr>
+      <td>device MAC learning</td>
+      <td>XU selector <code>0x02</code> RPC (<code>cmd_set 0x0D</code>, <code>cmd_id 0x08</code>, <code>sub-cmd 0x18</code>)</td>
+      <td class="ok">learned at <code>Devices::open</code>; the only RPC frame that doesn't need a MAC, used to bootstrap subsequent sends on any unit</td>
+      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/getStatus.md">getStatus.md</a> (pair 0)</td>
+    </tr>
+    <tr>
+      <td>hot-plug events</td>
+      <td>polling <code>/sys/class/video4linux</code> on a 2 s interval</td>
+      <td class="ok">working end-to-end; <code>Devices::events</code> emits <code>DeviceAdded</code> / <code>DeviceRemoved</code></td>
+      <td>n/a (Linux-only for now)</td>
+    </tr>
+    <tr>
+      <td>periodic status snapshots</td>
+      <td>per-<code>Device</code> poller thread (default 2.5 s, <code>Cadence::Fast</code> = 25 ms)</td>
+      <td class="ok">samples PU brightness/contrast/saturation + CT pan/tilt/zoom into <code>Event::Status</code></td>
+      <td>n/a</td>
     </tr>
     <tr>
       <td>audio AGC</td>
       <td>standard USB Audio Class</td>
       <td class="pending">stub only</td>
       <td> - </td>
-    </tr>
-    <tr>
-      <td>firmware / serial read</td>
-      <td>XU selector <code>0x02</code> RPC frame</td>
-      <td class="ok">decoded + verified on the captured unit via canned-frame replay (smoke prints `4.4.6.1` / `RMOMWYI1141LCV`)</td>
-      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/getStatus.md">getStatus.md</a></td>
-    </tr>
-    <tr>
-      <td>arbitrary RPC writes (current-state snapshot, etc.)</td>
-      <td>XU selector <code>0x02</code> RPC frame</td>
-      <td class="pending">CRC at offset 6-7 not yet cracked; per-device captures only</td>
-      <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/crc-investigation.md">crc-investigation.md</a></td>
     </tr>
   </tbody>
 </table>
