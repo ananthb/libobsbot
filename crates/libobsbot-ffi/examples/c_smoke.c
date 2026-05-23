@@ -65,6 +65,17 @@ int main(void) {
     EXPECT(obsbot_device_set_auto_framing(NULL, 0),  OBSBOT_ERR_NOT_FOUND, "set_auto_framing");
     EXPECT(obsbot_device_set_ai_mode(NULL, 0),       OBSBOT_ERR_NOT_FOUND, "set_ai_mode");
     EXPECT(obsbot_device_set_audio_agc(NULL, 1),     OBSBOT_ERR_NOT_FOUND, "set_audio_agc");
+    EXPECT(obsbot_device_set_hue(NULL, 0),           OBSBOT_ERR_NOT_FOUND, "set_hue");
+    EXPECT(obsbot_device_set_sharpness(NULL, 0),     OBSBOT_ERR_NOT_FOUND, "set_sharpness");
+    EXPECT(obsbot_device_set_gain(NULL, 0),          OBSBOT_ERR_NOT_FOUND, "set_gain");
+    EXPECT(obsbot_device_set_backlight_compensation(NULL, 0), OBSBOT_ERR_NOT_FOUND, "set_backlight");
+    EXPECT(obsbot_device_set_anti_flicker(NULL, 1),  OBSBOT_ERR_NOT_FOUND, "set_anti_flicker");
+    EXPECT(obsbot_device_set_anti_flicker(NULL, 99), OBSBOT_ERR_OUT_OF_RANGE, "set_anti_flicker range");
+    EXPECT(obsbot_device_set_auto_focus(NULL, 1),    OBSBOT_ERR_NOT_FOUND, "set_auto_focus");
+    EXPECT(obsbot_device_set_ae_mode(NULL, 0),       OBSBOT_ERR_NOT_FOUND, "set_ae_mode");
+    EXPECT(obsbot_device_set_ae_mode(NULL, 99),      OBSBOT_ERR_OUT_OF_RANGE, "set_ae_mode range");
+    EXPECT(obsbot_device_set_ae_lock(NULL, 1),       OBSBOT_ERR_NOT_FOUND, "set_ae_lock");
+    EXPECT(obsbot_device_set_exposure_time(NULL, 100), OBSBOT_ERR_NOT_FOUND, "set_exposure_time");
     EXPECT(obsbot_device_set_status_cadence(NULL, 0), OBSBOT_ERR_NOT_FOUND, "set_status_cadence");
 
     /* Out-of-range enum values must fail without touching device state. */

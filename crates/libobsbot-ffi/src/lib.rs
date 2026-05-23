@@ -12,8 +12,8 @@ use core::ffi::{c_char, c_int};
 use std::ptr;
 
 use libobsbot_core::{
-    AiMode, AutoFramingMode, Cadence, Device, Devices, Error, FovType, MediaMode, WdrMode,
-    WhiteBalanceMode,
+    AeMode, AiMode, AntiFlicker, AutoFramingMode, Cadence, Device, Devices, Error, FovType,
+    MediaMode, WdrMode, WhiteBalanceMode,
 };
 
 // ---- error codes -----------------------------------------------------------
@@ -254,6 +254,189 @@ pub unsafe extern "C" fn obsbot_device_saturation(
     out_value: *mut i32,
 ) -> c_int {
     read_into(handle, out_value, Device::saturation)
+}
+
+/// Set image hue (PU). i16 LE on the wire; out-of-range values
+/// return `OBSBOT_ERR_OUT_OF_RANGE`.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_hue(handle: *mut ObsbotDevice, value: i32) -> c_int {
+    with_device(handle, |d| d.set_hue(value))
+}
+
+/// Read current image hue into `*out_value`.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_hue(
+    handle: *mut ObsbotDevice,
+    out_value: *mut i32,
+) -> c_int {
+    read_into(handle, out_value, Device::hue)
+}
+
+/// Set image sharpness (PU). u16 LE.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_sharpness(
+    handle: *mut ObsbotDevice,
+    value: i32,
+) -> c_int {
+    with_device(handle, |d| d.set_sharpness(value))
+}
+
+/// Read current image sharpness into `*out_value`.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_sharpness(
+    handle: *mut ObsbotDevice,
+    out_value: *mut i32,
+) -> c_int {
+    read_into(handle, out_value, Device::sharpness)
+}
+
+/// Set sensor gain (PU). u16 LE.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_gain(handle: *mut ObsbotDevice, value: i32) -> c_int {
+    with_device(handle, |d| d.set_gain(value))
+}
+
+/// Read current sensor gain into `*out_value`.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_gain(
+    handle: *mut ObsbotDevice,
+    out_value: *mut i32,
+) -> c_int {
+    read_into(handle, out_value, Device::gain)
+}
+
+/// Set backlight compensation (PU). u16 LE; 0 disables it.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_backlight_compensation(
+    handle: *mut ObsbotDevice,
+    value: i32,
+) -> c_int {
+    with_device(handle, |d| d.set_backlight_compensation(value))
+}
+
+/// Read current backlight-compensation value into `*out_value`.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_backlight_compensation(
+    handle: *mut ObsbotDevice,
+    out_value: *mut i32,
+) -> c_int {
+    read_into(handle, out_value, Device::backlight_compensation)
+}
+
+/// Set anti-flicker mode (PU): 0 = Off, 1 = 50 Hz, 2 = 60 Hz, 3 = Auto.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_anti_flicker(
+    handle: *mut ObsbotDevice,
+    mode: c_int,
+) -> c_int {
+    let Some(m) = anti_flicker_from_int(mode) else {
+        return OBSBOT_ERR_OUT_OF_RANGE;
+    };
+    with_device(handle, |d| d.set_anti_flicker(m))
+}
+
+/// Read current anti-flicker mode into `*out_mode` (same encoding).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_anti_flicker(
+    handle: *mut ObsbotDevice,
+    out_mode: *mut c_int,
+) -> c_int {
+    if handle.is_null() || out_mode.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    match (*handle).0.anti_flicker() {
+        Ok(m) => {
+            *out_mode = anti_flicker_to_int(m);
+            OBSBOT_OK
+        }
+        Err(e) => map_error(&e),
+    }
+}
+
+/// Enable or disable autofocus (CT).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_auto_focus(
+    handle: *mut ObsbotDevice,
+    on: c_int,
+) -> c_int {
+    with_device(handle, |d| d.set_auto_focus(on != 0))
+}
+
+/// Whether autofocus is currently enabled.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_auto_focus(
+    handle: *mut ObsbotDevice,
+    out_on: *mut c_int,
+) -> c_int {
+    if handle.is_null() || out_on.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    match (*handle).0.auto_focus() {
+        Ok(b) => {
+            *out_on = c_int::from(b);
+            OBSBOT_OK
+        }
+        Err(e) => map_error(&e),
+    }
+}
+
+/// Set auto-exposure mode: 0 = Manual, 1 = Auto, 2 = `ShutterPriority`,
+/// 3 = `AperturePriority`.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_ae_mode(
+    handle: *mut ObsbotDevice,
+    mode: c_int,
+) -> c_int {
+    let Some(m) = ae_mode_from_int(mode) else {
+        return OBSBOT_ERR_OUT_OF_RANGE;
+    };
+    with_device(handle, |d| d.set_ae_mode(m))
+}
+
+/// Read current auto-exposure mode into `*out_mode` (same encoding).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_ae_mode(
+    handle: *mut ObsbotDevice,
+    out_mode: *mut c_int,
+) -> c_int {
+    if handle.is_null() || out_mode.is_null() {
+        return OBSBOT_ERR_NOT_FOUND;
+    }
+    match (*handle).0.ae_mode() {
+        Ok(m) => {
+            *out_mode = ae_mode_to_int(m);
+            OBSBOT_OK
+        }
+        Err(e) => map_error(&e),
+    }
+}
+
+/// Lock or unlock auto-exposure. Convenience over
+/// [`obsbot_device_set_ae_mode`].
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_ae_lock(
+    handle: *mut ObsbotDevice,
+    locked: c_int,
+) -> c_int {
+    with_device(handle, |d| d.set_ae_lock(locked != 0))
+}
+
+/// Set manual exposure time in 100 us units (CT).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_exposure_time(
+    handle: *mut ObsbotDevice,
+    value_100us: u32,
+) -> c_int {
+    with_device(handle, |d| d.set_exposure_time(value_100us))
+}
+
+/// Read current exposure time (100 us units) into `*out_value`.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_exposure_time(
+    handle: *mut ObsbotDevice,
+    out_value: *mut u32,
+) -> c_int {
+    read_into(handle, out_value, Device::exposure_time)
 }
 
 /// Set pan + tilt as normalised values in -1.0..=1.0.
@@ -711,6 +894,44 @@ const fn ai_from_int(v: c_int) -> Option<AiMode> {
         4 => Some(AiMode::WhiteBoard),
         5 => Some(AiMode::Desk),
         _ => None,
+    }
+}
+
+const fn anti_flicker_from_int(v: c_int) -> Option<AntiFlicker> {
+    match v {
+        0 => Some(AntiFlicker::Off),
+        1 => Some(AntiFlicker::Hz50),
+        2 => Some(AntiFlicker::Hz60),
+        3 => Some(AntiFlicker::Auto),
+        _ => None,
+    }
+}
+
+const fn anti_flicker_to_int(m: AntiFlicker) -> c_int {
+    match m {
+        AntiFlicker::Off => 0,
+        AntiFlicker::Hz50 => 1,
+        AntiFlicker::Hz60 => 2,
+        AntiFlicker::Auto => 3,
+    }
+}
+
+const fn ae_mode_from_int(v: c_int) -> Option<AeMode> {
+    match v {
+        0 => Some(AeMode::Manual),
+        1 => Some(AeMode::Auto),
+        2 => Some(AeMode::ShutterPriority),
+        3 => Some(AeMode::AperturePriority),
+        _ => None,
+    }
+}
+
+const fn ae_mode_to_int(m: AeMode) -> c_int {
+    match m {
+        AeMode::Manual => 0,
+        AeMode::Auto => 1,
+        AeMode::ShutterPriority => 2,
+        AeMode::AperturePriority => 3,
     }
 }
 

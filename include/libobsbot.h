@@ -217,6 +217,94 @@ int obsbot_device_set_saturation(struct ObsbotDevice *handle, int32_t value);
 int obsbot_device_saturation(struct ObsbotDevice *handle, int32_t *out_value);
 
 /**
+ * Set image hue (PU). i16 LE on the wire; out-of-range values
+ * return `OBSBOT_ERR_OUT_OF_RANGE`.
+ */
+int obsbot_device_set_hue(struct ObsbotDevice *handle, int32_t value);
+
+/**
+ * Read current image hue into `*out_value`.
+ */
+int obsbot_device_hue(struct ObsbotDevice *handle, int32_t *out_value);
+
+/**
+ * Set image sharpness (PU). u16 LE.
+ */
+int obsbot_device_set_sharpness(struct ObsbotDevice *handle, int32_t value);
+
+/**
+ * Read current image sharpness into `*out_value`.
+ */
+int obsbot_device_sharpness(struct ObsbotDevice *handle, int32_t *out_value);
+
+/**
+ * Set sensor gain (PU). u16 LE.
+ */
+int obsbot_device_set_gain(struct ObsbotDevice *handle, int32_t value);
+
+/**
+ * Read current sensor gain into `*out_value`.
+ */
+int obsbot_device_gain(struct ObsbotDevice *handle, int32_t *out_value);
+
+/**
+ * Set backlight compensation (PU). u16 LE; 0 disables it.
+ */
+int obsbot_device_set_backlight_compensation(struct ObsbotDevice *handle, int32_t value);
+
+/**
+ * Read current backlight-compensation value into `*out_value`.
+ */
+int obsbot_device_backlight_compensation(struct ObsbotDevice *handle, int32_t *out_value);
+
+/**
+ * Set anti-flicker mode (PU): 0 = Off, 1 = 50 Hz, 2 = 60 Hz, 3 = Auto.
+ */
+int obsbot_device_set_anti_flicker(struct ObsbotDevice *handle, int mode);
+
+/**
+ * Read current anti-flicker mode into `*out_mode` (same encoding).
+ */
+int obsbot_device_anti_flicker(struct ObsbotDevice *handle, int *out_mode);
+
+/**
+ * Enable or disable autofocus (CT).
+ */
+int obsbot_device_set_auto_focus(struct ObsbotDevice *handle, int on);
+
+/**
+ * Whether autofocus is currently enabled.
+ */
+int obsbot_device_auto_focus(struct ObsbotDevice *handle, int *out_on);
+
+/**
+ * Set auto-exposure mode: 0 = Manual, 1 = Auto, 2 = `ShutterPriority`,
+ * 3 = `AperturePriority`.
+ */
+int obsbot_device_set_ae_mode(struct ObsbotDevice *handle, int mode);
+
+/**
+ * Read current auto-exposure mode into `*out_mode` (same encoding).
+ */
+int obsbot_device_ae_mode(struct ObsbotDevice *handle, int *out_mode);
+
+/**
+ * Lock or unlock auto-exposure. Convenience over
+ * [`obsbot_device_set_ae_mode`].
+ */
+int obsbot_device_set_ae_lock(struct ObsbotDevice *handle, int locked);
+
+/**
+ * Set manual exposure time in 100 us units (CT).
+ */
+int obsbot_device_set_exposure_time(struct ObsbotDevice *handle, uint32_t value_100us);
+
+/**
+ * Read current exposure time (100 us units) into `*out_value`.
+ */
+int obsbot_device_exposure_time(struct ObsbotDevice *handle, uint32_t *out_value);
+
+/**
  * Set pan + tilt as normalised values in -1.0..=1.0.
  */
 int obsbot_device_set_pan_tilt(struct ObsbotDevice *handle, float pan, float tilt);
