@@ -65,6 +65,9 @@ int main(void) {
     EXPECT(obsbot_device_set_auto_framing(NULL, 0),  OBSBOT_ERR_NOT_FOUND, "set_auto_framing");
     EXPECT(obsbot_device_set_ai_mode(NULL, 0),       OBSBOT_ERR_NOT_FOUND, "set_ai_mode");
     EXPECT(obsbot_device_set_audio_agc(NULL, 1),     OBSBOT_ERR_NOT_FOUND, "set_audio_agc");
+    EXPECT(obsbot_device_set_flip_horizontal(NULL, 0), OBSBOT_ERR_NOT_FOUND, "set_flip_horizontal");
+    EXPECT(obsbot_device_set_portrait(NULL, 0),      OBSBOT_ERR_NOT_FOUND, "set_portrait");
+    EXPECT(obsbot_device_set_led(NULL, 0),           OBSBOT_ERR_NOT_FOUND, "set_led");
     EXPECT(obsbot_device_set_hue(NULL, 0),           OBSBOT_ERR_NOT_FOUND, "set_hue");
     EXPECT(obsbot_device_set_sharpness(NULL, 0),     OBSBOT_ERR_NOT_FOUND, "set_sharpness");
     EXPECT(obsbot_device_set_gain(NULL, 0),          OBSBOT_ERR_NOT_FOUND, "set_gain");

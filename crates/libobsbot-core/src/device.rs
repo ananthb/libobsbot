@@ -776,6 +776,32 @@ impl Device {
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
+    /// Flip the image horizontally (left/right mirror). XU
+    /// mode-register control id `0x14`.
+    pub fn set_flip_horizontal(&self, on: bool) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_FLIP_HORIZONTAL, &[u8::from(on)]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
+    /// Switch between landscape (`false`) and portrait (`true`)
+    /// orientation. XU mode-register control id `0x0c`. The SDK calls
+    /// this "vertical mode"; in portrait mode the camera rotates the
+    /// pixel stream 90° so streaming apps see a tall frame natively.
+    pub fn set_portrait(&self, on: bool) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_VERTICAL, &[u8::from(on)]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
+    /// Turn the camera's front-facing status LED on or off. XU
+    /// mode-register control id `0x18`.
+    pub fn set_led(&self, on: bool) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_LED, &[u8::from(on)]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
     // ---- private helpers ----------------------------------------------------
 
     fn pu_get_i16(&self, req: UvcGet, selector: u8) -> Result<i16> {
@@ -1332,6 +1358,25 @@ mod tests {
         assert_eq!(entity, meet2::XU_ENTITY_ID);
         assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
         assert_eq!(payload[..3], [0x00, 0x01, 0x02]);
+    }
+
+    #[test]
+    fn flip_portrait_led_route_to_xu_mode_register() {
+        let (d, mock) = device_with_mock();
+
+        d.set_flip_horizontal(true).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        assert_eq!(payload[..3], [0x14, 0x01, 0x01]);
+
+        d.set_portrait(true).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..3], [0x0c, 0x01, 0x01]);
+
+        d.set_led(false).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..3], [0x18, 0x01, 0x00]);
     }
 
     #[test]

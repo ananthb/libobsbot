@@ -626,6 +626,27 @@ pub unsafe extern "C" fn obsbot_device_set_audio_agc(
     with_device(handle, |d| d.set_audio_agc(on != 0))
 }
 
+/// Horizontal image flip (left/right mirror).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_flip_horizontal(
+    handle: *mut ObsbotDevice,
+    on: c_int,
+) -> c_int {
+    with_device(handle, |d| d.set_flip_horizontal(on != 0))
+}
+
+/// Switch between landscape (0) and portrait (non-zero) orientation.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_portrait(handle: *mut ObsbotDevice, on: c_int) -> c_int {
+    with_device(handle, |d| d.set_portrait(on != 0))
+}
+
+/// Turn the front-facing status LED on (non-zero) or off (zero).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_led(handle: *mut ObsbotDevice, on: c_int) -> c_int {
+    with_device(handle, |d| d.set_led(on != 0))
+}
+
 /// Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
 #[no_mangle]
 pub unsafe extern "C" fn obsbot_device_set_status_cadence(

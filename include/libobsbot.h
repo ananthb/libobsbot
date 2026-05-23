@@ -384,6 +384,21 @@ int obsbot_device_set_ai_mode(struct ObsbotDevice *handle, int mode);
 int obsbot_device_set_audio_agc(struct ObsbotDevice *handle, int on);
 
 /**
+ * Horizontal image flip (left/right mirror).
+ */
+int obsbot_device_set_flip_horizontal(struct ObsbotDevice *handle, int on);
+
+/**
+ * Switch between landscape (0) and portrait (non-zero) orientation.
+ */
+int obsbot_device_set_portrait(struct ObsbotDevice *handle, int on);
+
+/**
+ * Turn the front-facing status LED on (non-zero) or off (zero).
+ */
+int obsbot_device_set_led(struct ObsbotDevice *handle, int on);
+
+/**
  * Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
  */
 int obsbot_device_set_status_cadence(struct ObsbotDevice *handle, int cadence);

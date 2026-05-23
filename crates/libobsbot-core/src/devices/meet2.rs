@@ -58,6 +58,23 @@ pub(crate) const MODE_AI_MODE: u8 = 0x16;
 /// `uvcExtSet(selector=0x06, [0x17, 0x01, value, 0×57])`).
 pub(crate) const MODE_AUDIO_AGC: u8 = 0x17;
 
+/// `XU_SEL_MODE_REGISTER` control id for portrait-mode orientation.
+/// Value byte: `0` = landscape (default), `1` = portrait (90°
+/// rotation). Recovered from `libdev.so::cameraSetVerticalModeU`
+/// (always calls `uvcExtSet(0x06, [0x0c, 0x01, value, ...])` regardless
+/// of `productType`).
+pub(crate) const MODE_VERTICAL: u8 = 0x0c;
+
+/// `XU_SEL_MODE_REGISTER` control id for horizontal image flip
+/// (left/right mirror). Value byte: `0` = off, `1` = on. Recovered
+/// from `libdev.so::cameraSetImageFlipHorizonU`.
+pub(crate) const MODE_FLIP_HORIZONTAL: u8 = 0x14;
+
+/// `XU_SEL_MODE_REGISTER` control id for the camera's front-facing
+/// status LED. Value byte: `0` = off, `1` = on. Recovered from
+/// `libdev.so::cameraSetLedCtrlU`.
+pub(crate) const MODE_LED: u8 = 0x18;
+
 /// `XU_SEL_MODE_REGISTER` control id for the auto-framing sub-mode.
 /// Value is two u8 bytes `[group_single, close_upper]` matching the
 /// SDK's `Device::AutoFramingType` enum
