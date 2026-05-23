@@ -15,6 +15,9 @@ pub mod usb;
 #[cfg(target_os = "linux")]
 pub(crate) mod uvcvideo;
 
+#[cfg(target_os = "macos")]
+pub mod macos;
+
 use crate::uvc::UvcGet;
 use crate::Result;
 

@@ -25,6 +25,12 @@ pub struct DeviceInfo {
     pub(crate) busnum: u8,
     #[cfg(target_os = "linux")]
     pub(crate) devnum: u8,
+
+    /// IOKit registry id of the matched USB device on macOS - used to
+    /// re-open the same device from a `DeviceInfo` even if the
+    /// enumeration order changed.
+    #[cfg(target_os = "macos")]
+    pub(crate) registry_id: u64,
 }
 
 /// Owns the hot-plug watcher and the registry of connected cameras.
@@ -67,33 +73,22 @@ impl Devices {
 
     /// Open a connected camera for control.
     pub fn open(&self, info: &DeviceInfo) -> Result<Device> {
-        #[cfg(target_os = "linux")]
-        {
-            let transport: Arc<dyn crate::transport::Transport> =
-                Arc::new(crate::transport::usb::UsbTransport::open(info)?);
-            // Bootstrap: learn the device's MAC tail before constructing
-            // the Device. The MAC-query handshake doesn't itself need a
-            // MAC, so it's safe to issue on a freshly opened camera.
-            let mac = crate::device::learn_mac(transport.as_ref())?;
-            tracing::debug!(
-                mac = ?format!("{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]),
-                "learned device MAC"
-            );
-            Ok(Device::new(
-                info.clone(),
-                transport,
-                Some(self.events_tx.clone()),
-                mac,
-            ))
-        }
-        #[cfg(not(target_os = "linux"))]
-        {
-            let _ = info;
-            Err(crate::Error::Unsupported(
-                "open: macOS and Windows transports are planned; only Linux is implemented",
-            ))
-        }
+        let transport: Arc<dyn crate::transport::Transport> = open_transport(info)?;
+        // Bootstrap: learn the device's MAC tail before constructing
+        // the Device. The MAC-query handshake doesn't itself need a
+        // MAC, so it's safe to issue on a freshly opened camera.
+        let mac = crate::device::learn_mac(transport.as_ref())?;
+        tracing::debug!(
+            mac = ?format!("{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]),
+            "learned device MAC"
+        );
+        Ok(Device::new(
+            info.clone(),
+            transport,
+            Some(self.events_tx.clone()),
+            mac,
+        ))
     }
 
     /// Subscribe to device add/remove events. Each call returns a clone
@@ -121,9 +116,34 @@ fn enumerate() -> Vec<DeviceInfo> {
     {
         linux::enumerate()
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        crate::transport::macos::enumerate()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         Vec::new()
+    }
+}
+
+/// Open a Transport for the given device on the current platform.
+fn open_transport(info: &DeviceInfo) -> Result<Arc<dyn crate::transport::Transport>> {
+    #[cfg(target_os = "linux")]
+    {
+        Ok(Arc::new(crate::transport::usb::UsbTransport::open(info)?))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Ok(Arc::new(crate::transport::macos::MacosTransport::open(
+            info,
+        )?))
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = info;
+        Err(crate::Error::Unsupported(
+            "open: only Linux and macOS transports are implemented; Windows is planned",
+        ))
     }
 }
 
