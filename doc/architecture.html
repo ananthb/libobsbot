@@ -100,14 +100,22 @@ device is enough.</p>
       mode-register status blob are already in place; remaining
       additions are mostly per-method captures of advanced controls
       (AE-lock, MAE-ISO, audio AGC, ...).</li>
-  <li><code>src/transport/usb.rs</code> is Linux-only today. macOS
-      (IOKit) and Windows (WinUSB) transports are planned as
-      additional <code>Transport</code> impls.</li>
-  <li><code>src/discovery.rs</code> currently polls
-      <code>/sys/class/video4linux</code> every 2 s to detect
-      add/remove. macOS / Windows transports (and possibly a switch
-      to <code>libudev</code> for sub-second latency) are tracked
-      under future work.</li>
+  <li><code>src/transport/usb.rs</code> (Linux) and
+      <code>src/transport/macos.rs</code> (macOS) ship today. macOS
+      uses <code>IOUSBDeviceInterface::DeviceRequest</code> on the
+      default control pipe so it bypasses the per-interface claim
+      <code>UVCAssistant</code> always holds on the
+      <code>VideoControl</code> interface; the SDK works while
+      FaceTime / Zoom / OBS / Photo Booth own the camera. A Windows
+      (WinUSB) transport is planned as an additional
+      <code>Transport</code> impl.</li>
+  <li><code>src/discovery.rs</code> polls
+      <code>/sys/class/video4linux</code> on Linux and
+      <code>IOServiceGetMatchingServices(IOUSBDevice)</code> on macOS
+      every 2 s to detect add/remove. Switching to push-based notification
+      (<code>libudev</code> on Linux,
+      <code>IOServiceAddMatchingNotification</code> on macOS) for
+      sub-second latency is tracked under future work.</li>
 </ul>
 
 <h2>What is intentionally out of scope (v1)</h2>

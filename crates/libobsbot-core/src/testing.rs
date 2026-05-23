@@ -90,6 +90,8 @@ pub(crate) fn meet2_mock_info() -> DeviceInfo {
         busnum: 0,
         #[cfg(target_os = "linux")]
         devnum: 0,
+        #[cfg(target_os = "macos")]
+        registry_id: 0,
     }
 }
 

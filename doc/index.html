@@ -107,10 +107,11 @@ modes) are out of scope for v1.</p>
     </tr>
     <tr>
       <td>macOS</td>
-      <td>Supported with one constraint: no other application may have the
-          camera open at the same time. AVFoundation/CoreMediaIO holds an
-          exclusive claim and IOKit will refuse arbitrary control
-          transfers.</td>
+      <td>Supported via IOKit. Coexists with FaceTime/Zoom/OBS/Photo Booth:
+          control transfers go through <code>IOUSBDeviceInterface::DeviceRequest</code>
+          on the device's default control pipe, bypassing the
+          per-interface claim that <code>UVCAssistant</code> always holds
+          on the <code>VideoControl</code> interface.</td>
     </tr>
     <tr>
       <td>Windows</td>

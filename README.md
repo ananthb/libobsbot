@@ -25,7 +25,7 @@ mirrors the Rust surface. Full docs at
 | OS | Notes |
 |----|-------|
 | Linux | First-class. Goal: work while the camera is also open in Zoom/OBS/Cheese - route through the `uvcvideo` driver rather than detaching it. |
-| macOS | Supported with one constraint: no other application may have the camera open at the same time. AVFoundation/CoreMediaIO holds an exclusive claim and IOKit will refuse arbitrary control transfers. |
+| macOS | Supported via IOKit. Coexists with FaceTime/Zoom/OBS/Photo Booth: control transfers route through `IOUSBDeviceInterface::DeviceRequest` on the default control pipe, bypassing the per-interface claim that `UVCAssistant` holds on the `VideoControl` interface. |
 | Windows | The camera must be bound to WinUSB via [Zadig](https://zadig.akeo.ie). Binding WinUSB removes the camera from `usbvideo.sys`, so it becomes unusable in Zoom/OBS until the driver is restored. |
 
 ## License

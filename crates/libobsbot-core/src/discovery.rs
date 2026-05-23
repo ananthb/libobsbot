@@ -26,10 +26,12 @@ pub struct DeviceInfo {
     #[cfg(target_os = "linux")]
     pub(crate) devnum: u8,
 
-    /// IOKit registry id of the matched USB device on macOS - used to
-    /// re-open the same device from a `DeviceInfo` even if the
-    /// enumeration order changed.
+    /// `IOKit` registry id of the matched USB device on macOS - used
+    /// to re-open the same device from a `DeviceInfo` even if the
+    /// enumeration order changed. Read by `MacosTransport::open`,
+    /// which lands in a follow-up commit.
     #[cfg(target_os = "macos")]
+    #[allow(dead_code)]
     pub(crate) registry_id: u64,
 }
 
