@@ -434,6 +434,15 @@ pub unsafe extern "C" fn obsbot_device_set_ai_mode(
     with_device(handle, |d| d.set_ai_mode(m))
 }
 
+/// Microphone Automatic Gain Control: non-zero on, zero off.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_audio_agc(
+    handle: *mut ObsbotDevice,
+    on: c_int,
+) -> c_int {
+    with_device(handle, |d| d.set_audio_agc(on != 0))
+}
+
 /// Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
 #[no_mangle]
 pub unsafe extern "C" fn obsbot_device_set_status_cadence(

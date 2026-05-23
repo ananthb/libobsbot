@@ -52,6 +52,12 @@ pub(crate) const MODE_FOV: u8 = 0x04;
 /// `setAiMode.pcapng` frames 56 (value=2) + 64 (value=0).
 pub(crate) const MODE_AI_MODE: u8 = 0x16;
 
+/// `XU_SEL_MODE_REGISTER` control id for the microphone Automatic
+/// Gain Control. Value byte: `0` = off, `1` = on. Recovered from
+/// `libdev.so::cameraSetAudioAGC` (catch-all branch calls
+/// `uvcExtSet(selector=0x06, [0x17, 0x01, value, 0×57])`).
+pub(crate) const MODE_AUDIO_AGC: u8 = 0x17;
+
 /// `XU_SEL_MODE_REGISTER` control id for the auto-framing sub-mode.
 /// Value is two u8 bytes `[group_single, close_upper]` matching the
 /// SDK's `Device::AutoFramingType` enum

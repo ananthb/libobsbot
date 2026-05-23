@@ -64,6 +64,7 @@ int main(void) {
     EXPECT(obsbot_device_set_media_mode(NULL, 0),    OBSBOT_ERR_NOT_FOUND, "set_media_mode");
     EXPECT(obsbot_device_set_auto_framing(NULL, 0),  OBSBOT_ERR_NOT_FOUND, "set_auto_framing");
     EXPECT(obsbot_device_set_ai_mode(NULL, 0),       OBSBOT_ERR_NOT_FOUND, "set_ai_mode");
+    EXPECT(obsbot_device_set_audio_agc(NULL, 1),     OBSBOT_ERR_NOT_FOUND, "set_audio_agc");
     EXPECT(obsbot_device_set_status_cadence(NULL, 0), OBSBOT_ERR_NOT_FOUND, "set_status_cadence");
 
     /* Out-of-range enum values must fail without touching device state. */

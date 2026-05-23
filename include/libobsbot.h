@@ -291,6 +291,11 @@ int obsbot_device_set_auto_framing(struct ObsbotDevice *handle, int mode);
 int obsbot_device_set_ai_mode(struct ObsbotDevice *handle, int mode);
 
 /**
+ * Microphone Automatic Gain Control: non-zero on, zero off.
+ */
+int obsbot_device_set_audio_agc(struct ObsbotDevice *handle, int on);
+
+/**
  * Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
  */
 int obsbot_device_set_status_cadence(struct ObsbotDevice *handle, int cadence);

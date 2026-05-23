@@ -529,6 +529,17 @@ impl Device {
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
+    /// Toggle the microphone Automatic Gain Control. XU mode-register
+    /// control id `0x17`. The Meet 2's standard USB Audio Class
+    /// Feature Unit only exposes Mute + Volume; AGC is an
+    /// OBSBOT-proprietary control routed through the video XU rather
+    /// than the audio surface.
+    pub fn set_audio_agc(&self, on: bool) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_AUDIO_AGC, &[u8::from(on)]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
     // ---- private helpers ----------------------------------------------------
 
     fn pu_get_i16(&self, req: UvcGet, selector: u8) -> Result<i16> {
@@ -982,6 +993,22 @@ mod tests {
         assert_eq!(entity, meet2::XU_ENTITY_ID);
         assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
         assert_eq!(payload[..3], [0x00, 0x01, 0x02]);
+    }
+
+    #[test]
+    fn audio_agc_routes_to_xu_mode_register_with_wire_bytes() {
+        let (d, mock) = device_with_mock();
+        d.set_audio_agc(true).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        // control id 0x17, value_size 0x01, value 0x01 (on).
+        assert_eq!(payload[..3], [0x17, 0x01, 0x01]);
+        assert!(payload[3..].iter().all(|&b| b == 0));
+
+        d.set_audio_agc(false).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..3], [0x17, 0x01, 0x00]);
     }
 
     #[test]
