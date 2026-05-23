@@ -20,6 +20,22 @@ pub enum FovType {
     Narrow,
 }
 
+/// Auto-exposure mode. Maps onto the UVC `CT_AE_MODE_CONTROL`
+/// bitmap from §4.2.2.1.2 (only one bit is set at a time on a
+/// SET; the GET reply may have multiple bits indicating supported
+/// modes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AeMode {
+    /// Manual exposure, manual gain.
+    Manual,
+    /// Automatic exposure, automatic gain. The default.
+    Auto,
+    /// Manual exposure, automatic gain.
+    ShutterPriority,
+    /// Automatic exposure, manual gain.
+    AperturePriority,
+}
+
 /// Mains frequency for the anti-flicker algorithm. Maps onto the UVC
 /// `PU_POWER_LINE_FREQUENCY_CONTROL` value byte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

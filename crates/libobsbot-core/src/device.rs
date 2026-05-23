@@ -17,7 +17,7 @@ use crate::discovery::DeviceInfo;
 use crate::status::{Event, EventSender};
 use crate::transport::Transport;
 use crate::types::{
-    AiMode, AntiFlicker, AutoFramingMode, Cadence, FovType, MediaMode, ProductType, Status,
+    AeMode, AiMode, AntiFlicker, AutoFramingMode, Cadence, FovType, MediaMode, ProductType, Status,
     WdrMode, WhiteBalanceMode,
 };
 use crate::uvc::{self, UvcGet};
@@ -282,6 +282,120 @@ impl Device {
             &mut buf,
         )?;
         Ok(f32::from(u16::from_le_bytes(buf)))
+    }
+
+    /// Enable or disable autofocus. `CT_FOCUS_AUTO_CONTROL`, u8.
+    pub fn set_auto_focus(&self, on: bool) -> Result<()> {
+        self.transport
+            .uvc_set(uvc::CAMERA_TERMINAL, uvc::ct::FOCUS_AUTO, &[u8::from(on)])
+    }
+
+    /// Whether autofocus is currently enabled.
+    pub fn auto_focus(&self) -> Result<bool> {
+        let mut buf = [0u8; 1];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::FOCUS_AUTO,
+            &mut buf,
+        )?;
+        Ok(buf[0] != 0)
+    }
+
+    /// Set the auto-exposure mode. `CT_AE_MODE_CONTROL`, u8 bitmap
+    /// (UVC 1.5 §4.2.2.1.2). The Meet 2 supports Manual + Auto;
+    /// Shutter Priority and Aperture Priority are accepted by the
+    /// enum for SDK parity and silently no-op on cameras that don't
+    /// support them.
+    pub fn set_ae_mode(&self, mode: AeMode) -> Result<()> {
+        let byte: u8 = match mode {
+            AeMode::Manual => 0x01,
+            AeMode::Auto => 0x02,
+            AeMode::ShutterPriority => 0x04,
+            AeMode::AperturePriority => 0x08,
+        };
+        self.transport
+            .uvc_set(uvc::CAMERA_TERMINAL, uvc::ct::AE_MODE, &[byte])
+    }
+
+    /// Read the current auto-exposure mode.
+    pub fn ae_mode(&self) -> Result<AeMode> {
+        let mut buf = [0u8; 1];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::AE_MODE,
+            &mut buf,
+        )?;
+        // The GET reply has exactly one bit set per UVC §4.2.2.1.2.
+        match buf[0] {
+            0x01 => Ok(AeMode::Manual),
+            0x02 => Ok(AeMode::Auto),
+            0x04 => Ok(AeMode::ShutterPriority),
+            0x08 => Ok(AeMode::AperturePriority),
+            other => Err(Error::BadResponse {
+                selector: uvc::ct::AE_MODE,
+                bytes: vec![other],
+            }),
+        }
+    }
+
+    /// Lock or unlock exposure + gain. Convenience over
+    /// [`set_ae_mode`](Self::set_ae_mode): `true` selects
+    /// [`AeMode::Manual`] (both locked), `false` selects
+    /// [`AeMode::Auto`]. Matches the SDK's `cameraSetAELockR(bool)`.
+    pub fn set_ae_lock(&self, locked: bool) -> Result<()> {
+        self.set_ae_mode(if locked { AeMode::Manual } else { AeMode::Auto })
+    }
+
+    /// Whether exposure is currently locked.
+    pub fn ae_lock(&self) -> Result<bool> {
+        Ok(matches!(self.ae_mode()?, AeMode::Manual))
+    }
+
+    /// Set manual exposure time. `CT_EXPOSURE_TIME_ABSOLUTE_CONTROL`,
+    /// u32 LE in 100 us units (UVC 1.5 §4.2.2.1.4). Setting this when
+    /// the AE mode allows auto exposure (Auto or Aperture Priority)
+    /// has no effect; pair with [`set_ae_lock(true)`](Self::set_ae_lock)
+    /// for full manual control.
+    pub fn set_exposure_time(&self, value_100us: u32) -> Result<()> {
+        self.transport.uvc_set(
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::EXPOSURE_TIME_ABSOLUTE,
+            &value_100us.to_le_bytes(),
+        )
+    }
+
+    /// Read the current exposure time, in 100 us units.
+    pub fn exposure_time(&self) -> Result<u32> {
+        let mut buf = [0u8; 4];
+        let _ = self.transport.uvc_get(
+            UvcGet::Cur,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::EXPOSURE_TIME_ABSOLUTE,
+            &mut buf,
+        )?;
+        Ok(u32::from_le_bytes(buf))
+    }
+
+    /// Reported exposure-time range, in 100 us units.
+    pub fn exposure_time_range(&self) -> Result<RangeInclusive<u32>> {
+        let mut buf = [0u8; 4];
+        let _ = self.transport.uvc_get(
+            UvcGet::Min,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::EXPOSURE_TIME_ABSOLUTE,
+            &mut buf,
+        )?;
+        let lo = u32::from_le_bytes(buf);
+        let _ = self.transport.uvc_get(
+            UvcGet::Max,
+            uvc::CAMERA_TERMINAL,
+            uvc::ct::EXPOSURE_TIME_ABSOLUTE,
+            &mut buf,
+        )?;
+        let hi = u32::from_le_bytes(buf);
+        Ok(lo..=hi)
     }
 
     // ---- Processing Unit (standard UVC §A.9.5) ------------------------------
@@ -992,6 +1106,60 @@ mod tests {
         let (_, sel, payload) = last_set(&mock);
         assert_eq!(sel, uvc::pu::BACKLIGHT_COMPENSATION);
         assert_eq!(payload, 1_u16.to_le_bytes().to_vec());
+    }
+
+    #[test]
+    fn auto_focus_routes_to_ct_focus_auto_with_bool_byte() {
+        let (d, mock) = device_with_mock();
+        d.set_auto_focus(true).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, uvc::CAMERA_TERMINAL);
+        assert_eq!(sel, uvc::ct::FOCUS_AUTO);
+        assert_eq!(payload, vec![1]);
+
+        d.set_auto_focus(false).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload, vec![0]);
+    }
+
+    #[test]
+    fn ae_mode_routes_to_ct_with_uvc_bitmap_byte() {
+        let (d, mock) = device_with_mock();
+        for (mode, byte) in [
+            (AeMode::Manual, 0x01),
+            (AeMode::Auto, 0x02),
+            (AeMode::ShutterPriority, 0x04),
+            (AeMode::AperturePriority, 0x08),
+        ] {
+            d.set_ae_mode(mode).unwrap();
+            let (entity, sel, payload) = last_set(&mock);
+            assert_eq!(entity, uvc::CAMERA_TERMINAL);
+            assert_eq!(sel, uvc::ct::AE_MODE);
+            assert_eq!(payload, vec![byte], "wrong byte for {mode:?}");
+        }
+    }
+
+    #[test]
+    fn ae_lock_is_thin_wrapper_over_ae_mode() {
+        let (d, mock) = device_with_mock();
+        d.set_ae_lock(true).unwrap();
+        let (_, sel, payload) = last_set(&mock);
+        assert_eq!(sel, uvc::ct::AE_MODE);
+        assert_eq!(payload, vec![0x01]); // Manual
+
+        d.set_ae_lock(false).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload, vec![0x02]); // Auto
+    }
+
+    #[test]
+    fn exposure_time_routes_to_ct_with_u32_le_payload() {
+        let (d, mock) = device_with_mock();
+        d.set_exposure_time(1234).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, uvc::CAMERA_TERMINAL);
+        assert_eq!(sel, uvc::ct::EXPOSURE_TIME_ABSOLUTE);
+        assert_eq!(payload, 1234_u32.to_le_bytes().to_vec());
     }
 
     #[test]

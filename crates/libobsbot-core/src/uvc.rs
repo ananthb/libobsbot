@@ -13,8 +13,15 @@ pub(crate) const PROCESSING_UNIT: u8 = 3;
 
 /// `CameraTerminal` control selectors (UVC 1.5 §A.9.4).
 pub(crate) mod ct {
+    /// `CT_AE_MODE_CONTROL`; u8 bitmap (1 = Manual, 2 = Auto,
+    /// 4 = Shutter Priority, 8 = Aperture Priority).
+    pub(crate) const AE_MODE: u8 = 0x02;
+    /// `CT_EXPOSURE_TIME_ABSOLUTE_CONTROL`; u32 LE in 100 us units, 4 bytes.
+    pub(crate) const EXPOSURE_TIME_ABSOLUTE: u8 = 0x04;
     /// `CT_FOCUS_ABSOLUTE_CONTROL`; u16 LE focal-length-like value, 2 bytes.
     pub(crate) const FOCUS_ABSOLUTE: u8 = 0x06;
+    /// `CT_FOCUS_AUTO_CONTROL`; bool, 1 byte.
+    pub(crate) const FOCUS_AUTO: u8 = 0x08;
     /// `CT_ZOOM_ABSOLUTE_CONTROL`; u16 LE objective focal length, 2 bytes.
     pub(crate) const ZOOM_ABSOLUTE: u8 = 0x0b;
     /// `CT_PANTILT_ABSOLUTE_CONTROL`; i32 LE pan + i32 LE tilt arc-seconds, 8 bytes.
