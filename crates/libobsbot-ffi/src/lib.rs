@@ -711,6 +711,24 @@ pub unsafe extern "C" fn obsbot_device_set_suspend_time(
     with_device(handle, |d| d.set_suspend_time(minutes))
 }
 
+/// Whether the microphone stays hot while the camera is asleep.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_microphone_during_sleep(
+    handle: *mut ObsbotDevice,
+    on: c_int,
+) -> c_int {
+    with_device(handle, |d| d.set_microphone_during_sleep(on != 0))
+}
+
+/// Set the physical-button behaviour (firmware-defined byte value).
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_button_mode(
+    handle: *mut ObsbotDevice,
+    mode: u8,
+) -> c_int {
+    with_device(handle, |d| d.set_button_mode(mode))
+}
+
 /// Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
 #[no_mangle]
 pub unsafe extern "C" fn obsbot_device_set_status_cadence(

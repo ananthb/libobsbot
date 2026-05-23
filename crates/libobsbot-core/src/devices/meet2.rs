@@ -109,6 +109,18 @@ pub(crate) const MODE_DISABLE_SLEEP_WITHOUT_STREAM: u8 = 0x12;
 /// Recovered from `libdev.so::cameraSetSuspendTimeU`.
 pub(crate) const MODE_SUSPEND_TIME: u8 = 0x0b;
 
+/// `XU_SEL_MODE_REGISTER` control id for whether the microphone stays
+/// hot while the camera is asleep. Value byte: `0` = mic off in sleep
+/// (default), `1` = mic on in sleep. Recovered from
+/// `libdev.so::cameraSetMicrophoneDuringSleepU`.
+pub(crate) const MODE_MIC_DURING_SLEEP: u8 = 0x13;
+
+/// `XU_SEL_MODE_REGISTER` control id for the physical-button behaviour.
+/// Value byte from the SDK's `ButtonMode` set (vendor-defined; not all
+/// modes apply to every Meet 2 firmware). Recovered from
+/// `libdev.so::cameraSetButtonModeU`.
+pub(crate) const MODE_BUTTON_MODE: u8 = 0x07;
+
 /// `XU_SEL_MODE_REGISTER` control id for the auto-framing sub-mode.
 /// Value is two u8 bytes `[group_single, close_upper]` matching the
 /// SDK's `Device::AutoFramingType` enum

@@ -78,6 +78,8 @@ int main(void) {
     EXPECT(obsbot_device_set_mask_level(NULL, 1000), OBSBOT_ERR_OUT_OF_RANGE, "set_mask_level >u8");
     EXPECT(obsbot_device_set_disable_sleep_without_stream(NULL, 1), OBSBOT_ERR_NOT_FOUND, "disable_sleep");
     EXPECT(obsbot_device_set_suspend_time(NULL, 15), OBSBOT_ERR_NOT_FOUND, "set_suspend_time");
+    EXPECT(obsbot_device_set_microphone_during_sleep(NULL, 1), OBSBOT_ERR_NOT_FOUND, "mic_during_sleep");
+    EXPECT(obsbot_device_set_button_mode(NULL, 0),   OBSBOT_ERR_NOT_FOUND, "set_button_mode");
     EXPECT(obsbot_device_set_hue(NULL, 0),           OBSBOT_ERR_NOT_FOUND, "set_hue");
     EXPECT(obsbot_device_set_sharpness(NULL, 0),     OBSBOT_ERR_NOT_FOUND, "set_sharpness");
     EXPECT(obsbot_device_set_gain(NULL, 0),          OBSBOT_ERR_NOT_FOUND, "set_gain");

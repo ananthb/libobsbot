@@ -877,6 +877,24 @@ impl Device {
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
+    /// Whether the microphone stays hot while the camera is asleep.
+    /// Maps to the SDK's `cameraSetMicrophoneDuringSleepU`.
+    pub fn set_microphone_during_sleep(&self, on: bool) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_MIC_DURING_SLEEP, &[u8::from(on)]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
+    /// Set the physical-button behaviour. Values are firmware-defined;
+    /// per `CameraStatus.meet.key_mode` in the SDK header. The raw byte
+    /// is sent as-is so callers can pick the encoding the device
+    /// firmware uses.
+    pub fn set_button_mode(&self, mode: u8) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_BUTTON_MODE, &[mode]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
     // ---- private helpers ----------------------------------------------------
 
     fn pu_get_i16(&self, req: UvcGet, selector: u8) -> Result<i16> {
@@ -1433,6 +1451,21 @@ mod tests {
         assert_eq!(entity, meet2::XU_ENTITY_ID);
         assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
         assert_eq!(payload[..3], [0x00, 0x01, 0x02]);
+    }
+
+    #[test]
+    fn microphone_during_sleep_and_button_mode_route_to_mode_register() {
+        let (d, mock) = device_with_mock();
+
+        d.set_microphone_during_sleep(true).unwrap();
+        let (entity, sel, payload) = last_set(&mock);
+        assert_eq!(entity, meet2::XU_ENTITY_ID);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        assert_eq!(payload[..3], [0x13, 0x01, 0x01]);
+
+        d.set_button_mode(2).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..3], [0x07, 0x01, 0x02]);
     }
 
     #[test]

@@ -430,6 +430,16 @@ int obsbot_device_set_disable_sleep_without_stream(struct ObsbotDevice *handle, 
 int obsbot_device_set_suspend_time(struct ObsbotDevice *handle, uint16_t minutes);
 
 /**
+ * Whether the microphone stays hot while the camera is asleep.
+ */
+int obsbot_device_set_microphone_during_sleep(struct ObsbotDevice *handle, int on);
+
+/**
+ * Set the physical-button behaviour (firmware-defined byte value).
+ */
+int obsbot_device_set_button_mode(struct ObsbotDevice *handle, uint8_t mode);
+
+/**
  * Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
  */
 int obsbot_device_set_status_cadence(struct ObsbotDevice *handle, int cadence);
