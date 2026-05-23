@@ -188,6 +188,42 @@ See <a href="protocol.html">protocol notes</a>.</p>
       <td><a href="https://github.com/ananthb/libobsbot/blob/main/doc/protocol/meet2/setAudioAgc.md">setAudioAgc.md</a></td>
     </tr>
     <tr>
+      <td>mirror / horizontal flip</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x14</code></td>
+      <td class="ok">set decoded from <code>cameraSetImageFlipHorizonU</code></td>
+      <td>recovered from <code>libdev.so</code></td>
+    </tr>
+    <tr>
+      <td>portrait orientation</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x0c</code></td>
+      <td class="ok">set decoded from <code>cameraSetVerticalModeU</code></td>
+      <td>recovered from <code>libdev.so</code></td>
+    </tr>
+    <tr>
+      <td>status LED</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x18</code></td>
+      <td class="ok">set decoded from <code>cameraSetLedCtrlU</code></td>
+      <td>recovered from <code>libdev.so</code></td>
+    </tr>
+    <tr>
+      <td>virtual background (enable / mode / colour / mask level)</td>
+      <td>XU selector <code>0x06</code>, control ids <code>0x05</code> / <code>0x06</code> / <code>0x10</code> / <code>0x11</code></td>
+      <td class="ok">set decoded from <code>cameraSetBg{Enable,Mode,Color}U</code> + <code>cameraSetMaskLevelU</code>; <code>MediaBgMode</code> and <code>MediaBgColor</code> enum values match SDK header</td>
+      <td>recovered from <code>libdev.so</code></td>
+    </tr>
+    <tr>
+      <td>auto-suspend (timer + disable-without-stream + mic during sleep)</td>
+      <td>XU selector <code>0x06</code>, control ids <code>0x0b</code> / <code>0x12</code> / <code>0x13</code></td>
+      <td class="ok">set decoded from <code>cameraSetSuspendTimeU</code> / <code>cameraSetDisableSleepWithoutStreamU</code> / <code>cameraSetMicrophoneDuringSleepU</code></td>
+      <td>recovered from <code>libdev.so</code></td>
+    </tr>
+    <tr>
+      <td>physical-button mode</td>
+      <td>XU selector <code>0x06</code>, control id <code>0x07</code></td>
+      <td class="ok">set decoded from <code>cameraSetButtonModeU</code> (raw u8; firmware-defined values)</td>
+      <td>recovered from <code>libdev.so</code></td>
+    </tr>
+    <tr>
       <td>firmware version (read)</td>
       <td>XU selector <code>0x02</code> RPC (<code>cmd 0x08 / 0x04</code>)</td>
       <td class="ok"><code>Device::firmware</code> returns a parsed <code>FirmwareVersion</code> with Ord support</td>
@@ -200,9 +236,9 @@ See <a href="protocol.html">protocol notes</a>.</p>
       <td> - </td>
     </tr>
     <tr>
-      <td>mirror / flip</td>
+      <td>mirror / flip (SDK <code>cameraSetMirrorFlipR</code>)</td>
       <td>XU selector <code>0x02</code> RPC (libdev magic <code>0x29000b00010000</code>)</td>
-      <td class="pending">SDK symbol identified; wire format pending a targeted pcap</td>
+      <td class="pending">distinct from the XU mode-register horizontal flip above; this is the RPC-routed variant only Tail Air uses. Wire format pending a targeted pcap if/when needed</td>
       <td> - </td>
     </tr>
   </tbody>
