@@ -100,8 +100,9 @@
               cargo-audit
               cargo-deny
               rust-cbindgen
-              valgrind
             ] ++ lib.optionals stdenv.isLinux [
+              # valgrind is Linux-only in nixpkgs (broken on darwin).
+              valgrind
               wireshark
               usbutils
             ]);
@@ -222,8 +223,10 @@
             doCheck = false;
           });
 
+        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
           # Valgrind over the C smoke - the FFI boundary is exactly where
-          # C-side leaks / UAFs would hide.
+          # C-side leaks / UAFs would hide. Linux-only because valgrind
+          # is broken on darwin in nixpkgs.
           valgrind-c-smoke = pkgs.runCommand "libobsbot-valgrind-c-smoke" {
             nativeBuildInputs = with pkgs; [ gcc valgrind ];
           } ''
