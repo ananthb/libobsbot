@@ -20,6 +20,87 @@ pub enum FovType {
     Narrow,
 }
 
+/// Parsed firmware version, four dotted-decimal numbers. The Meet 2
+/// reports them in `major.minor.patch.build` order; the camera-side
+/// encoding reverses the byte order, which [`crate::Device::firmware`]
+/// already unscrambles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FirmwareVersion {
+    /// Major number.
+    pub major: u8,
+    /// Minor number.
+    pub minor: u8,
+    /// Patch number.
+    pub patch: u8,
+    /// Build number (vendor-specific; rolls within a `(major, minor, patch)`).
+    pub build: u8,
+}
+
+impl FirmwareVersion {
+    /// Parse `"a.b.c.d"` into a [`FirmwareVersion`].
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        let mut parts = s.split('.');
+        let major = parts.next()?.parse().ok()?;
+        let minor = parts.next()?.parse().ok()?;
+        let patch = parts.next()?.parse().ok()?;
+        let build = parts.next()?.parse().ok()?;
+        if parts.next().is_some() {
+            return None;
+        }
+        Some(Self {
+            major,
+            minor,
+            patch,
+            build,
+        })
+    }
+}
+
+impl core::fmt::Display for FirmwareVersion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "{}.{}.{}.{}",
+            self.major, self.minor, self.patch, self.build
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FirmwareVersion;
+
+    #[test]
+    fn firmware_version_parses_dotted_decimals() {
+        let v = FirmwareVersion::parse("4.4.6.1").unwrap();
+        assert_eq!(v.major, 4);
+        assert_eq!(v.minor, 4);
+        assert_eq!(v.patch, 6);
+        assert_eq!(v.build, 1);
+        assert_eq!(v.to_string(), "4.4.6.1");
+    }
+
+    #[test]
+    fn firmware_version_rejects_malformed_input() {
+        assert!(FirmwareVersion::parse("4.4.6").is_none());
+        assert!(FirmwareVersion::parse("4.4.6.1.2").is_none());
+        assert!(FirmwareVersion::parse("4.4.6.x").is_none());
+        assert!(FirmwareVersion::parse("").is_none());
+    }
+
+    #[test]
+    fn firmware_version_orders_lexicographically_by_field_priority() {
+        let a = FirmwareVersion::parse("4.4.6.1").unwrap();
+        let b = FirmwareVersion::parse("4.4.6.2").unwrap();
+        let c = FirmwareVersion::parse("4.5.0.0").unwrap();
+        let d = FirmwareVersion::parse("5.0.0.0").unwrap();
+        assert!(a < b);
+        assert!(b < c);
+        assert!(c < d);
+    }
+}
+
 /// Auto-exposure mode. Maps onto the UVC `CT_AE_MODE_CONTROL`
 /// bitmap from §4.2.2.1.2 (only one bit is set at a time on a
 /// SET; the GET reply may have multiple bits indicating supported

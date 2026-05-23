@@ -17,8 +17,8 @@ use crate::discovery::DeviceInfo;
 use crate::status::{Event, EventSender};
 use crate::transport::Transport;
 use crate::types::{
-    AeMode, AiMode, AntiFlicker, AutoFramingMode, Cadence, FovType, MediaMode, ProductType, Status,
-    WdrMode, WhiteBalanceMode,
+    AeMode, AiMode, AntiFlicker, AutoFramingMode, Cadence, FirmwareVersion, FovType, MediaMode,
+    ProductType, Status, WdrMode, WhiteBalanceMode,
 };
 use crate::uvc::{self, UvcGet};
 use crate::{Error, Result};
@@ -137,6 +137,18 @@ impl Device {
         tail.copy_from_slice(&self.mac);
         let request = meet2::build_rpc_frame(0x01, 0x01, 0x0D, 0x08, 0x04, &[], 18, &tail);
         self.rpc_request_then_reply(&request, meet2::decode_firmware_reply)
+    }
+
+    /// Parsed firmware version, freshly read from the camera. Convenience
+    /// over [`firmware_from_camera`](Self::firmware_from_camera) for
+    /// callers that want to do version comparisons. Returns
+    /// [`Error::BadResponse`] if the string isn't four dotted decimals.
+    pub fn firmware(&self) -> Result<FirmwareVersion> {
+        let s = self.firmware_from_camera()?;
+        FirmwareVersion::parse(&s).ok_or_else(|| Error::BadResponse {
+            selector: meet2::XU_SEL_RPC,
+            bytes: s.into_bytes(),
+        })
     }
 
     /// Ask the camera for its serial number via the XU RPC channel.
