@@ -13,7 +13,7 @@ use std::ptr;
 
 use libobsbot_core::{
     AeMode, AiMode, AntiFlicker, AutoFramingMode, Cadence, Device, Devices, Error, FovType,
-    MediaMode, WdrMode, WhiteBalanceMode,
+    MediaBgColor, MediaBgMode, MediaMode, WdrMode, WhiteBalanceMode,
 };
 
 // ---- error codes -----------------------------------------------------------
@@ -647,6 +647,70 @@ pub unsafe extern "C" fn obsbot_device_set_led(handle: *mut ObsbotDevice, on: c_
     with_device(handle, |d| d.set_led(on != 0))
 }
 
+/// Master enable for the virtual-background system.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_bg_enable(
+    handle: *mut ObsbotDevice,
+    on: c_int,
+) -> c_int {
+    with_device(handle, |d| d.set_bg_enable(on != 0))
+}
+
+/// Virtual-background mode: 0 = Disable, 1 = Color, 17 = Replace, 18 = Blur.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_bg_mode(
+    handle: *mut ObsbotDevice,
+    mode: c_int,
+) -> c_int {
+    let Some(m) = bg_mode_from_int(mode) else {
+        return OBSBOT_ERR_OUT_OF_RANGE;
+    };
+    with_device(handle, |d| d.set_bg_mode(m))
+}
+
+/// Background colour key: -2 = Disable, -1 = Null, 0 = Blue, 1 = Green,
+/// 2 = Red, 3 = Black, 4 = White.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_bg_color(
+    handle: *mut ObsbotDevice,
+    color: c_int,
+) -> c_int {
+    let Some(c) = bg_color_from_int(color) else {
+        return OBSBOT_ERR_OUT_OF_RANGE;
+    };
+    with_device(handle, |d| d.set_bg_color(c))
+}
+
+/// Set the virtual-background blur intensity, 0..=100.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_mask_level(
+    handle: *mut ObsbotDevice,
+    level: c_int,
+) -> c_int {
+    let Ok(byte) = u8::try_from(level) else {
+        return OBSBOT_ERR_OUT_OF_RANGE;
+    };
+    with_device(handle, |d| d.set_mask_level(byte))
+}
+
+/// Control auto-suspend without streaming. Non-zero disables sleep.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_disable_sleep_without_stream(
+    handle: *mut ObsbotDevice,
+    disable: c_int,
+) -> c_int {
+    with_device(handle, |d| d.set_disable_sleep_without_stream(disable != 0))
+}
+
+/// Set the auto-suspend timer in minutes; `0` keeps the camera awake.
+#[no_mangle]
+pub unsafe extern "C" fn obsbot_device_set_suspend_time(
+    handle: *mut ObsbotDevice,
+    minutes: u16,
+) -> c_int {
+    with_device(handle, |d| d.set_suspend_time(minutes))
+}
+
 /// Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
 #[no_mangle]
 pub unsafe extern "C" fn obsbot_device_set_status_cadence(
@@ -953,6 +1017,29 @@ const fn ae_mode_to_int(m: AeMode) -> c_int {
         AeMode::Auto => 1,
         AeMode::ShutterPriority => 2,
         AeMode::AperturePriority => 3,
+    }
+}
+
+const fn bg_mode_from_int(v: c_int) -> Option<MediaBgMode> {
+    match v {
+        0 => Some(MediaBgMode::Disable),
+        1 => Some(MediaBgMode::Color),
+        17 => Some(MediaBgMode::Replace),
+        18 => Some(MediaBgMode::Blur),
+        _ => None,
+    }
+}
+
+const fn bg_color_from_int(v: c_int) -> Option<MediaBgColor> {
+    match v {
+        -2 => Some(MediaBgColor::Disable),
+        -1 => Some(MediaBgColor::Null),
+        0 => Some(MediaBgColor::Blue),
+        1 => Some(MediaBgColor::Green),
+        2 => Some(MediaBgColor::Red),
+        3 => Some(MediaBgColor::Black),
+        4 => Some(MediaBgColor::White),
+        _ => None,
     }
 }
 

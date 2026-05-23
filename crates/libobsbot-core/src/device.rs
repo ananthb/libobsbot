@@ -17,8 +17,8 @@ use crate::discovery::DeviceInfo;
 use crate::status::{Event, EventSender};
 use crate::transport::Transport;
 use crate::types::{
-    AeMode, AiMode, AntiFlicker, AutoFramingMode, Cadence, FirmwareVersion, FovType, MediaMode,
-    ProductType, Status, WdrMode, WhiteBalanceMode,
+    AeMode, AiMode, AntiFlicker, AutoFramingMode, Cadence, FirmwareVersion, FovType, MediaBgColor,
+    MediaBgMode, MediaMode, ProductType, Status, WdrMode, WhiteBalanceMode,
 };
 use crate::uvc::{self, UvcGet};
 use crate::{Error, Result};
@@ -802,6 +802,81 @@ impl Device {
             .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
     }
 
+    /// Master enable for the virtual-background system. Disabling
+    /// this returns the camera to a passthrough live image regardless
+    /// of the current [`MediaBgMode`].
+    pub fn set_bg_enable(&self, on: bool) -> Result<()> {
+        let payload = meet2::mode_register_payload(meet2::MODE_BG_ENABLE, &[u8::from(on)]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
+    /// Set the virtual-background mode (colour key / replace / blur).
+    /// Setting this to anything other than [`MediaBgMode::Disable`]
+    /// also requires [`set_bg_enable`](Self::set_bg_enable) to be on.
+    pub fn set_bg_mode(&self, mode: MediaBgMode) -> Result<()> {
+        let byte: u8 = match mode {
+            MediaBgMode::Disable => 0,
+            MediaBgMode::Color => 1,
+            MediaBgMode::Replace => 17,
+            MediaBgMode::Blur => 18,
+        };
+        let payload = meet2::mode_register_payload(meet2::MODE_BG_MODE, &[byte]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
+    /// Pick which colour the camera removes when
+    /// [`MediaBgMode::Color`] is active. The SDK enum has two
+    /// negative sentinels (`Disable = -2`, `Null = -1`) and five
+    /// positive colour values; the wire byte is the SDK value cast
+    /// to `i8`.
+    #[allow(clippy::cast_sign_loss)]
+    pub fn set_bg_color(&self, color: MediaBgColor) -> Result<()> {
+        let byte: i8 = match color {
+            MediaBgColor::Disable => -2,
+            MediaBgColor::Null => -1,
+            MediaBgColor::Blue => 0,
+            MediaBgColor::Green => 1,
+            MediaBgColor::Red => 2,
+            MediaBgColor::Black => 3,
+            MediaBgColor::White => 4,
+        };
+        let payload = meet2::mode_register_payload(meet2::MODE_BG_COLOR, &[byte as u8]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
+    /// Set the background-blur intensity, 0 (no blur) to 100 (max).
+    pub fn set_mask_level(&self, level: u8) -> Result<()> {
+        if level > 100 {
+            return Err(Error::OutOfRange);
+        }
+        let payload = meet2::mode_register_payload(meet2::MODE_MASK_LEVEL, &[level]);
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
+    /// Control whether the camera is allowed to auto-suspend when no
+    /// host application is streaming from it. `true` keeps it awake.
+    pub fn set_disable_sleep_without_stream(&self, disable: bool) -> Result<()> {
+        let payload = meet2::mode_register_payload(
+            meet2::MODE_DISABLE_SLEEP_WITHOUT_STREAM,
+            &[u8::from(disable)],
+        );
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
+    /// Set the auto-suspend timer, in minutes. `0` keeps the camera
+    /// awake indefinitely (subject to host-side power management).
+    pub fn set_suspend_time(&self, minutes: u16) -> Result<()> {
+        let payload =
+            meet2::mode_register_payload(meet2::MODE_SUSPEND_TIME, &minutes.to_le_bytes());
+        self.transport
+            .uvc_set(meet2::XU_ENTITY_ID, meet2::XU_SEL_MODE_REGISTER, &payload)
+    }
+
     // ---- private helpers ----------------------------------------------------
 
     fn pu_get_i16(&self, req: UvcGet, selector: u8) -> Result<i16> {
@@ -1358,6 +1433,57 @@ mod tests {
         assert_eq!(entity, meet2::XU_ENTITY_ID);
         assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
         assert_eq!(payload[..3], [0x00, 0x01, 0x02]);
+    }
+
+    #[test]
+    fn bg_mode_uses_sdk_enum_values_on_the_wire() {
+        let (d, mock) = device_with_mock();
+        for (mode, byte) in [
+            (MediaBgMode::Disable, 0),
+            (MediaBgMode::Color, 1),
+            (MediaBgMode::Replace, 17),
+            (MediaBgMode::Blur, 18),
+        ] {
+            d.set_bg_mode(mode).unwrap();
+            let (entity, sel, payload) = last_set(&mock);
+            assert_eq!(entity, meet2::XU_ENTITY_ID);
+            assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+            assert_eq!(payload[..3], [0x05, 0x01, byte], "wrong byte for {mode:?}");
+        }
+    }
+
+    #[test]
+    fn bg_color_signed_sentinels_round_trip_through_u8() {
+        let (d, mock) = device_with_mock();
+        // -2 (Disable) and -1 (Null) ride as 0xfe and 0xff respectively.
+        d.set_bg_color(MediaBgColor::Disable).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..3], [0x10, 0x01, 0xfe]);
+
+        d.set_bg_color(MediaBgColor::Null).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..3], [0x10, 0x01, 0xff]);
+
+        d.set_bg_color(MediaBgColor::Green).unwrap();
+        let (_, _, payload) = last_set(&mock);
+        assert_eq!(payload[..3], [0x10, 0x01, 0x01]);
+    }
+
+    #[test]
+    fn mask_level_rejects_above_100() {
+        let (d, _) = device_with_mock();
+        assert!(matches!(d.set_mask_level(101), Err(Error::OutOfRange)));
+        assert!(matches!(d.set_mask_level(255), Err(Error::OutOfRange)));
+    }
+
+    #[test]
+    fn suspend_time_encodes_u16_le() {
+        let (d, mock) = device_with_mock();
+        d.set_suspend_time(15).unwrap();
+        let (_, sel, payload) = last_set(&mock);
+        assert_eq!(sel, meet2::XU_SEL_MODE_REGISTER);
+        // control id 0x0b, value_size 0x02, then u16 LE 15 = 0x0f 0x00.
+        assert_eq!(payload[..4], [0x0b, 0x02, 0x0f, 0x00]);
     }
 
     #[test]

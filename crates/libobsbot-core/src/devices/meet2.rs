@@ -75,6 +75,40 @@ pub(crate) const MODE_FLIP_HORIZONTAL: u8 = 0x14;
 /// `libdev.so::cameraSetLedCtrlU`.
 pub(crate) const MODE_LED: u8 = 0x18;
 
+/// `XU_SEL_MODE_REGISTER` control id for the virtual-background mode.
+/// Value byte from the SDK's `MediaBgMode` enum (0 = disabled,
+/// 1 = green-screen colour, 17 = replace with image, 18 = blur).
+/// Recovered from `libdev.so::cameraSetBgModeU`.
+pub(crate) const MODE_BG_MODE: u8 = 0x05;
+
+/// `XU_SEL_MODE_REGISTER` control id for the virtual-background blur
+/// mask intensity. Value byte: 0-100 (percent). Recovered from
+/// `libdev.so::cameraSetMaskLevelU`.
+pub(crate) const MODE_MASK_LEVEL: u8 = 0x06;
+
+/// `XU_SEL_MODE_REGISTER` control id for the virtual-background colour
+/// chroma-key selection. Value byte from the SDK's
+/// `MediaBgModeColorType` enum (-2 = disable, -1 = null, 0 = blue,
+/// 1 = green, 2 = red, 3 = black, 4 = white). Recovered from
+/// `libdev.so::cameraSetBgColorU`.
+pub(crate) const MODE_BG_COLOR: u8 = 0x10;
+
+/// `XU_SEL_MODE_REGISTER` control id for the virtual-background
+/// master enable. Value byte: `0` = off, `1` = on. Recovered from
+/// `libdev.so::cameraSetBgEnableU`.
+pub(crate) const MODE_BG_ENABLE: u8 = 0x11;
+
+/// `XU_SEL_MODE_REGISTER` control id for whether the camera is
+/// allowed to suspend itself when no host application is streaming.
+/// Value byte: `0` = allow auto-sleep (default), `1` = disable it.
+/// Recovered from `libdev.so::cameraSetDisableSleepWithoutStreamU`.
+pub(crate) const MODE_DISABLE_SLEEP_WITHOUT_STREAM: u8 = 0x12;
+
+/// `XU_SEL_MODE_REGISTER` control id for the auto-suspend timer.
+/// Value: u16 LE, minutes (`0` keeps the camera awake indefinitely).
+/// Recovered from `libdev.so::cameraSetSuspendTimeU`.
+pub(crate) const MODE_SUSPEND_TIME: u8 = 0x0b;
+
 /// `XU_SEL_MODE_REGISTER` control id for the auto-framing sub-mode.
 /// Value is two u8 bytes `[group_single, close_upper]` matching the
 /// SDK's `Device::AutoFramingType` enum

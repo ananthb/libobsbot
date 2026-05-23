@@ -399,6 +399,37 @@ int obsbot_device_set_portrait(struct ObsbotDevice *handle, int on);
 int obsbot_device_set_led(struct ObsbotDevice *handle, int on);
 
 /**
+ * Master enable for the virtual-background system.
+ */
+int obsbot_device_set_bg_enable(struct ObsbotDevice *handle, int on);
+
+/**
+ * Virtual-background mode: 0 = Disable, 1 = Color, 17 = Replace, 18 = Blur.
+ */
+int obsbot_device_set_bg_mode(struct ObsbotDevice *handle, int mode);
+
+/**
+ * Background colour key: -2 = Disable, -1 = Null, 0 = Blue, 1 = Green,
+ * 2 = Red, 3 = Black, 4 = White.
+ */
+int obsbot_device_set_bg_color(struct ObsbotDevice *handle, int color);
+
+/**
+ * Set the virtual-background blur intensity, 0..=100.
+ */
+int obsbot_device_set_mask_level(struct ObsbotDevice *handle, int level);
+
+/**
+ * Control auto-suspend without streaming. Non-zero disables sleep.
+ */
+int obsbot_device_set_disable_sleep_without_stream(struct ObsbotDevice *handle, int disable);
+
+/**
+ * Set the auto-suspend timer in minutes; `0` keeps the camera awake.
+ */
+int obsbot_device_set_suspend_time(struct ObsbotDevice *handle, uint16_t minutes);
+
+/**
  * Status poller cadence: 0 = Slow (2.5 s), 1 = Fast (25 ms).
  */
 int obsbot_device_set_status_cadence(struct ObsbotDevice *handle, int cadence);

@@ -68,6 +68,16 @@ int main(void) {
     EXPECT(obsbot_device_set_flip_horizontal(NULL, 0), OBSBOT_ERR_NOT_FOUND, "set_flip_horizontal");
     EXPECT(obsbot_device_set_portrait(NULL, 0),      OBSBOT_ERR_NOT_FOUND, "set_portrait");
     EXPECT(obsbot_device_set_led(NULL, 0),           OBSBOT_ERR_NOT_FOUND, "set_led");
+    EXPECT(obsbot_device_set_bg_enable(NULL, 0),     OBSBOT_ERR_NOT_FOUND, "set_bg_enable");
+    EXPECT(obsbot_device_set_bg_mode(NULL, 0),       OBSBOT_ERR_NOT_FOUND, "set_bg_mode");
+    EXPECT(obsbot_device_set_bg_mode(NULL, 99),      OBSBOT_ERR_OUT_OF_RANGE, "set_bg_mode range");
+    EXPECT(obsbot_device_set_bg_color(NULL, 0),      OBSBOT_ERR_NOT_FOUND, "set_bg_color");
+    EXPECT(obsbot_device_set_bg_color(NULL, 99),     OBSBOT_ERR_OUT_OF_RANGE, "set_bg_color range");
+    EXPECT(obsbot_device_set_mask_level(NULL, 50),   OBSBOT_ERR_NOT_FOUND, "set_mask_level");
+    EXPECT(obsbot_device_set_mask_level(NULL, -1),   OBSBOT_ERR_OUT_OF_RANGE, "set_mask_level negative");
+    EXPECT(obsbot_device_set_mask_level(NULL, 1000), OBSBOT_ERR_OUT_OF_RANGE, "set_mask_level >u8");
+    EXPECT(obsbot_device_set_disable_sleep_without_stream(NULL, 1), OBSBOT_ERR_NOT_FOUND, "disable_sleep");
+    EXPECT(obsbot_device_set_suspend_time(NULL, 15), OBSBOT_ERR_NOT_FOUND, "set_suspend_time");
     EXPECT(obsbot_device_set_hue(NULL, 0),           OBSBOT_ERR_NOT_FOUND, "set_hue");
     EXPECT(obsbot_device_set_sharpness(NULL, 0),     OBSBOT_ERR_NOT_FOUND, "set_sharpness");
     EXPECT(obsbot_device_set_gain(NULL, 0),          OBSBOT_ERR_NOT_FOUND, "set_gain");

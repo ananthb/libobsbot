@@ -184,6 +184,44 @@ pub enum AiMode {
     Desk,
 }
 
+/// Virtual-background mode. Matches `Device::MediaBgMode` in the
+/// OBSBOT public SDK; only the meet series supports this surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaBgMode {
+    /// No virtual background.
+    Disable,
+    /// Green-screen / colour chroma key. Pair with [`MediaBgColor`]
+    /// to pick which colour gets keyed out.
+    Color,
+    /// Replace background with a still image. The image upload is
+    /// not yet implemented; see [`crate::Device::set_bg_mode`].
+    Replace,
+    /// Blur the background. Pair with
+    /// [`crate::Device::set_mask_level`] for blur intensity.
+    Blur,
+}
+
+/// Which background colour is keyed out when
+/// [`MediaBgMode::Color`] is active. Matches
+/// `Device::MediaBgModeColorType` in the SDK.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaBgColor {
+    /// Disable the colour key.
+    Disable,
+    /// Camera-picked default.
+    Null,
+    /// Key out blue.
+    Blue,
+    /// Key out green.
+    Green,
+    /// Key out red.
+    Red,
+    /// Key out black.
+    Black,
+    /// Key out white.
+    White,
+}
+
 /// Media mode. Matches `Device::MediaMode` in the OBSBOT public SDK
 /// (`MediaModeNormal = 0`, `MediaModeBackground = 1`, `MediaModeAutoFrame = 2`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
